@@ -14,7 +14,7 @@
     "express": "^5.3.0",
     "multer": "^2.5.0",
     "pdfjs-dist": "^4.10.38",
-    "qr-code-styling": "^1.9.2"
+    "qrcode-generator": "^1.5.2"
   },
   "engines": {
     "node": ">=22.5"

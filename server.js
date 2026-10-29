@@ -57,6 +57,20 @@ db.exec(`
     sort INTEGER DEFAULT 0,
     created_at INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS dishes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    price TEXT DEFAULT '',
+    category TEXT DEFAULT '',
+    photo TEXT,
+    tags TEXT DEFAULT '[]',
+    featured INTEGER DEFAULT 0,
+    available INTEGER DEFAULT 1,
+    sort INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS scans (
     restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
     day TEXT NOT NULL,
@@ -65,7 +79,41 @@ db.exec(`
   );
 `);
 
+// Columns added after the first release
+const cols = db.prepare('PRAGMA table_info(restaurants)').all().map(c => c.name);
+if (!cols.includes('qr_logo')) db.exec('ALTER TABLE restaurants ADD COLUMN qr_logo TEXT');
+if (!cols.includes('page')) db.exec("ALTER TABLE restaurants ADD COLUMN page TEXT DEFAULT '{}'");
+
 const THEMES = ['elegant', 'modern', 'rustic', 'midnight', 'fresh'];
+const DISH_TAGS = ['chef', 'popular', 'new', 'veg', 'vegan', 'spicy', 'gf', 'seafood'];
+// Guest page settings: [allowed values] or max text length
+const PAGE_OPTIONS = {
+  font: ['auto', 'classic', 'elegant', 'modern', 'friendly', 'bold', 'script'],
+  hero: ['full', 'compact', 'minimal'],
+  layout: ['grid', 'list', 'magazine'],
+  order: ['dishes', 'pdf'],
+  featured: [true, false],
+  search: [true, false],
+  currency: 12, announcement: 140, instagram: 200, facebook: 200, website: 200, whatsapp: 30,
+};
+const PAGE_DEFAULTS = { font: 'auto', hero: 'full', layout: 'grid', order: 'dishes', featured: true, search: true,
+  currency: '', announcement: '', instagram: '', facebook: '', website: '', whatsapp: '' };
+function cleanPage(input, prev) {
+  const out = { ...PAGE_DEFAULTS, ...prev };
+  for (const [k, rule] of Object.entries(PAGE_OPTIONS)) {
+    if (input[k] === undefined) continue;
+    if (Array.isArray(rule)) { if (rule.includes(input[k])) out[k] = input[k]; }
+    else out[k] = String(input[k]).trim().slice(0, rule);
+  }
+  for (const k of ['instagram', 'facebook', 'website']) {
+    if (out[k] && !/^https?:\/\//i.test(out[k])) out[k] = 'https://' + out[k].replace(/^\/+/, '');
+  }
+  return out;
+}
+function dishJson(d) {
+  return { id: d.id, name: d.name, description: d.description, price: d.price, category: d.category,
+    photo: d.photo ? `/uploads/${d.photo}` : null, tags: JSON.parse(d.tags || '[]'), featured: !!d.featured, available: !!d.available, sort: d.sort };
+}
 const PROFILE_FIELDS = ['name', 'tagline', 'address', 'phone', 'hours', 'wifi', 'theme', 'accent'];
 
 function slugify(s) {
@@ -85,8 +133,12 @@ function removeUpload(rel) {
 }
 function restaurantJson(r) {
   const menus = db.prepare('SELECT id, title, file, size, sort FROM menus WHERE restaurant_id = ? ORDER BY sort, id').all(r.id);
+  const dishes = db.prepare('SELECT * FROM dishes WHERE restaurant_id = ? ORDER BY sort, id').all(r.id);
   return {
     ...r,
+    page: { ...PAGE_DEFAULTS, ...JSON.parse(r.page || '{}') },
+    dishes: dishes.map(dishJson),
+    qr_logo: r.qr_logo ? `/uploads/${r.qr_logo}` : null,
     qr_design: r.qr_design ? JSON.parse(r.qr_design) : null,
     menus: menus.map(m => ({ ...m, url: `/uploads/${m.file}` })),
     logo: r.logo ? `/uploads/${r.logo}` : null,
@@ -234,18 +286,19 @@ app.put('/api/restaurant', auth, (req, res) => {
       return res.status(409).json({ error: 'That menu link is already taken.' });
     }
   }
-  db.prepare(`UPDATE restaurants SET name=?, tagline=?, address=?, phone=?, hours=?, wifi=?, theme=?, accent=?, slug=? WHERE id=?`)
-    .run(v.name, v.tagline, v.address, v.phone, v.hours, v.wifi, v.theme, v.accent, slug, r.id);
+  const page = b.page && typeof b.page === 'object' ? cleanPage(b.page, JSON.parse(r.page || '{}')) : JSON.parse(r.page || '{}');
+  db.prepare(`UPDATE restaurants SET name=?, tagline=?, address=?, phone=?, hours=?, wifi=?, theme=?, accent=?, slug=?, page=? WHERE id=?`)
+    .run(v.name, v.tagline, v.address, v.phone, v.hours, v.wifi, v.theme, v.accent, slug, JSON.stringify(page), r.id);
   res.json({ restaurant: restaurantJson(db.prepare('SELECT * FROM restaurants WHERE id = ?').get(r.id)) });
 });
 
-for (const field of ['logo', 'cover']) {
-  app.post(`/api/restaurant/${field}`, auth, handleUpload(imageUpload, 'image'), (req, res) => {
+for (const field of ['logo', 'cover', 'qr_logo']) {
+  app.post(`/api/restaurant/${field.replace('_', '-')}`, auth, handleUpload(imageUpload, 'image'), (req, res) => {
     removeUpload(req.restaurant[field]);
     db.prepare(`UPDATE restaurants SET ${field} = ? WHERE id = ?`).run(req.file.filename, req.restaurant.id);
     res.json({ url: `/uploads/${req.file.filename}` });
   });
-  app.delete(`/api/restaurant/${field}`, auth, (req, res) => {
+  app.delete(`/api/restaurant/${field.replace('_', '-')}`, auth, (req, res) => {
     removeUpload(req.restaurant[field]);
     db.prepare(`UPDATE restaurants SET ${field} = NULL WHERE id = ?`).run(req.restaurant.id);
     res.json({ ok: true });
@@ -298,12 +351,70 @@ app.delete('/api/menus/:id', auth, (req, res) => {
   res.json({ restaurant: restaurantJson(req.restaurant) });
 });
 
+// ---------- Dishes API ----------
+const optionalImage = (req, res, next) => imageUpload(req, res, err => {
+  if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Photo is too large (max 5 MB).' : err.message });
+  if (req.file && !checkMagic(req.file, 'image')) { removeUpload(req.file.filename); return res.status(400).json({ error: 'That photo appears to be corrupted.' }); }
+  next();
+});
+function dishFields(b, prev = {}) {
+  const pick = (k, max) => b[k] !== undefined ? String(b[k]).trim().slice(0, max) : (prev[k] ?? '');
+  let tags = prev.tags ? JSON.parse(prev.tags) : [];
+  if (b.tags !== undefined) {
+    try { tags = (Array.isArray(b.tags) ? b.tags : JSON.parse(b.tags)).filter(t => DISH_TAGS.includes(t)); } catch { tags = []; }
+  }
+  const bool = (k, dflt) => b[k] !== undefined ? (b[k] === true || b[k] === 'true' || b[k] === '1' ? 1 : 0) : (prev[k] ?? dflt);
+  return { name: pick('name', 80), description: pick('description', 400), price: pick('price', 24), category: pick('category', 40),
+    tags: JSON.stringify([...new Set(tags)]), featured: bool('featured', 0), available: bool('available', 1) };
+}
+function ownDish(req, res) {
+  const d = db.prepare('SELECT * FROM dishes WHERE id = ? AND restaurant_id = ?').get(Number(req.params.id), req.restaurant.id);
+  if (!d) res.status(404).json({ error: 'Dish not found.' });
+  return d;
+}
+app.post('/api/dishes', auth, optionalImage, (req, res) => {
+  const f = dishFields(req.body || {});
+  if (!f.name) { if (req.file) removeUpload(req.file.filename); return res.status(400).json({ error: 'Dish name is required.' }); }
+  const count = db.prepare('SELECT COUNT(*) AS c FROM dishes WHERE restaurant_id = ?').get(req.restaurant.id).c;
+  if (count >= 300) { if (req.file) removeUpload(req.file.filename); return res.status(400).json({ error: 'You can add up to 300 dishes.' }); }
+  db.prepare(`INSERT INTO dishes (restaurant_id, name, description, price, category, photo, tags, featured, available, sort, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(req.restaurant.id, f.name, f.description, f.price, f.category,
+    req.file ? req.file.filename : null, f.tags, f.featured, f.available, count, Date.now());
+  res.json({ restaurant: restaurantJson(req.restaurant) });
+});
+app.put('/api/dishes/:id', auth, optionalImage, (req, res) => {
+  const d = ownDish(req, res); if (!d) { if (req.file) removeUpload(req.file.filename); return; }
+  const f = dishFields(req.body || {}, d);
+  if (!f.name) return res.status(400).json({ error: 'Dish name is required.' });
+  let photo = d.photo;
+  if (req.file) { removeUpload(d.photo); photo = req.file.filename; }
+  else if (req.body.removePhoto === 'true' || req.body.removePhoto === true) { removeUpload(d.photo); photo = null; }
+  db.prepare('UPDATE dishes SET name=?, description=?, price=?, category=?, photo=?, tags=?, featured=?, available=? WHERE id=?')
+    .run(f.name, f.description, f.price, f.category, photo, f.tags, f.featured, f.available, d.id);
+  res.json({ restaurant: restaurantJson(req.restaurant) });
+});
+app.post('/api/dishes/:id/move', auth, (req, res) => {
+  const d = ownDish(req, res); if (!d) return;
+  const list = db.prepare('SELECT id FROM dishes WHERE restaurant_id = ? ORDER BY sort, id').all(req.restaurant.id).map(x => x.id);
+  const i = list.indexOf(d.id), j = i + (req.body.dir === 'up' ? -1 : 1);
+  if (j >= 0 && j < list.length) [list[i], list[j]] = [list[j], list[i]];
+  const upd = db.prepare('UPDATE dishes SET sort = ? WHERE id = ?');
+  list.forEach((id, idx) => upd.run(idx, id));
+  res.json({ restaurant: restaurantJson(req.restaurant) });
+});
+app.delete('/api/dishes/:id', auth, (req, res) => {
+  const d = ownDish(req, res); if (!d) return;
+  db.prepare('DELETE FROM dishes WHERE id = ?').run(d.id);
+  removeUpload(d.photo);
+  res.json({ restaurant: restaurantJson(req.restaurant) });
+});
+
 // ---------- Public ----------
 app.get('/api/public/:slug', (req, res) => {
   const r = db.prepare('SELECT * FROM restaurants WHERE slug = ?').get(req.params.slug);
   if (!r) return res.status(404).json({ error: 'Menu not found.' });
   const out = restaurantJson(r);
-  delete out.user_id; delete out.qr_design; delete out.views;
+  delete out.user_id; delete out.qr_design; delete out.qr_logo; delete out.views;
   res.json(out);
 });
 app.post('/api/public/:slug/view', (req, res) => {
@@ -318,7 +429,7 @@ app.post('/api/public/:slug/view', (req, res) => {
 
 const pub = path.join(__dirname, 'public');
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', index: false }));
-app.use('/vendor/qr-code-styling.js', express.static(require.resolve('qr-code-styling/lib/qr-code-styling.js')));
+app.use('/vendor/qrcode.js', express.static(require.resolve('qrcode-generator/qrcode.js')));
 app.use('/vendor/pdfjs', express.static(path.join(path.dirname(require.resolve('pdfjs-dist/package.json')), 'build'), { maxAge: '7d' }));
 app.use(express.static(pub, { extensions: ['html'] }));
 app.get('/m/:slug', (req, res) => res.sendFile(path.join(pub, 'menu.html')));

@@ -3,6 +3,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/app.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Crect width=%2224%22 height=%2224%22 rx=%225%22 fill=%22%23d9480f%22/%3E%3Cpath fill=%22%23fff%22 d=%22M5 5h5v5H5zm9 0h5v5h-5zM5 14h5v5H5zm9 0h2v2h-2zm3 3h2v2h-2zm-3 0h2v2h-2z%22/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Cormorant+Garamond:wght@600&family=Poppins:wght@600&family=Oswald:wght@600&family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
 <title>Dashboard — MenuQR</title></head><body>
 <nav class="nav"><div class="container"><a class="logo" href="/"><span class="logo-mark"></span>MenuQR</a><div class="nav-links">
   <a class="btn btn-ghost btn-sm" id="viewLive" target="_blank" rel="noopener">View live menu ↗</a>
@@ -10,17 +11,25 @@
 
 <div class="dash">
   <aside class="side">
-    <a href="#menus" data-tab="menus">📄 Menus</a>
-    <a href="#profile" data-tab="profile">🎨 Restaurant page</a>
+    <a href="#dishes" data-tab="dishes">🍽️ Dishes &amp; photos</a>
+    <a href="#menus" data-tab="menus">📄 PDF menus</a>
+    <a href="#design" data-tab="design">🎨 Menu page design</a>
     <a href="#qr" data-tab="qr">🔳 QR code designer</a>
     <a href="#insights" data-tab="insights">📈 Insights</a>
     <div class="live">Your menu link:<br><a id="liveLink" target="_blank" rel="noopener"></a></div>
   </aside>
 
   <main>
-    <!-- MENUS -->
+    <!-- DISHES -->
+    <section class="panel tab" id="tab-dishes">
+      <div class="panel-head"><div><h2>Dishes &amp; photos</h2><p>Add your dishes with mouth-watering photos. They appear as a beautiful photo menu for guests.</p></div>
+        <button class="btn btn-primary" id="addDish">＋ Add dish</button></div>
+      <div id="dishList"></div>
+    </section>
+
+    <!-- PDF MENUS -->
     <section class="panel tab" id="tab-menus">
-      <div class="panel-head"><div><h2>Your menus</h2><p>Upload one or more PDF menus. Guests see them as tabs, in this order.</p></div></div>
+      <div class="panel-head"><div><h2>PDF menus</h2><p>Upload one or more PDF menus. Guests can flip through them right on their phone.</p></div></div>
       <div class="field"><label for="menuTitle">Menu name (optional)</label><input id="menuTitle" type="text" maxlength="60" placeholder="e.g. Food, Drinks, Desserts, Today's specials"></div>
       <label class="dropzone" id="drop">
         <input type="file" id="pdfInput" accept="application/pdf" hidden>
@@ -31,37 +40,68 @@
       <ul class="menu-list" id="menuList"></ul>
     </section>
 
-    <!-- PROFILE -->
-    <section class="panel tab" id="tab-profile">
-      <div class="panel-head"><div><h2>Restaurant page</h2><p>This is what guests see when they scan your QR code.</p></div></div>
-      <form id="profileForm">
-        <div class="grid2">
-          <div class="field"><label>Logo</label><div class="img-up"><div class="preview" id="logoPrev"></div><div>
-            <button type="button" class="btn btn-ghost btn-sm" data-up="logo">Upload logo</button>
-            <button type="button" class="btn btn-danger btn-sm hidden" data-rm="logo">Remove</button><div class="hint">Square PNG/JPG works best.</div></div></div></div>
-          <div class="field"><label>Cover photo</label><div class="img-up"><div class="preview wide" id="coverPrev"></div><div>
-            <button type="button" class="btn btn-ghost btn-sm" data-up="cover">Upload cover</button>
-            <button type="button" class="btn btn-danger btn-sm hidden" data-rm="cover">Remove</button><div class="hint">A wide photo of your food or venue.</div></div></div></div>
-        </div>
-        <input type="file" id="imgInput" accept="image/png,image/jpeg,image/webp" hidden>
-        <div class="grid2">
-          <div class="field"><label for="name">Restaurant name</label><input id="name" name="name" type="text" maxlength="80" required></div>
-          <div class="field"><label for="tagline">Tagline</label><input id="tagline" name="tagline" type="text" maxlength="120" placeholder="Fresh seafood by the lagoon"></div>
-        </div>
-        <div class="field"><label for="slug">Menu link</label><div class="slug-row"><span id="slugBase"></span><input id="slug" name="slug" type="text" maxlength="40"></div>
-          <div class="hint">⚠️ Changing this changes your QR code — printed codes with the old link will stop working.</div></div>
-        <div class="grid2">
-          <div class="field"><label for="phone">Phone</label><input id="phone" name="phone" type="tel" maxlength="40" placeholder="+94 77 123 4567"></div>
-          <div class="field"><label for="wifi">Guest Wi-Fi password</label><input id="wifi" name="wifi" type="text" maxlength="60" placeholder="Optional"></div>
-        </div>
-        <div class="grid2">
-          <div class="field"><label for="address">Address</label><textarea id="address" name="address" maxlength="300" rows="2"></textarea></div>
-          <div class="field"><label for="hours">Opening hours</label><textarea id="hours" name="hours" maxlength="300" rows="2" placeholder="Mon–Sun · 11:00 – 22:00"></textarea></div>
-        </div>
-        <div class="field"><label>Menu page style</label><div class="themes" id="themes"></div></div>
-        <div class="field"><label>Accent colour</label><div class="color-row" id="accents"></div></div>
-        <div class="save-bar"><span class="saved" id="savedMsg">✓ Saved</span><a class="btn btn-ghost" id="previewBtn" target="_blank" rel="noopener">Preview</a><button class="btn btn-primary" type="submit">Save changes</button></div>
-      </form>
+    <!-- DESIGN -->
+    <section class="panel tab" id="tab-design">
+      <div class="panel-head"><div><h2>Menu page design</h2><p>Customise what guests see when they scan. The preview updates as you edit.</p></div>
+        <div class="row" style="gap:8px"><span class="saved" id="savedMsg">✓ Saved</span><button class="btn btn-primary" id="saveDesign">Save changes</button></div></div>
+      <div class="design-layout">
+        <form id="profileForm" autocomplete="off">
+          <div class="ctrl-group"><h3>Branding</h3>
+            <div class="grid2">
+              <div class="field"><label>Logo</label><div class="img-up"><div class="preview" id="logoPrev"></div><div>
+                <button type="button" class="btn btn-ghost btn-sm" data-up="logo">Upload logo</button>
+                <button type="button" class="btn btn-danger btn-sm hidden" data-rm="logo">Remove</button><div class="hint">Square PNG works best.</div></div></div></div>
+              <div class="field"><label>Cover photo</label><div class="img-up"><div class="preview wide" id="coverPrev"></div><div>
+                <button type="button" class="btn btn-ghost btn-sm" data-up="cover">Upload cover</button>
+                <button type="button" class="btn btn-danger btn-sm hidden" data-rm="cover">Remove</button><div class="hint">A wide photo of your food or venue.</div></div></div></div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label for="name">Restaurant name</label><input id="name" name="name" type="text" maxlength="80" required></div>
+              <div class="field"><label for="tagline">Tagline</label><input id="tagline" name="tagline" type="text" maxlength="120" placeholder="Fresh seafood by the lagoon"></div>
+            </div>
+          </div>
+          <div class="ctrl-group"><h3>Look &amp; feel</h3>
+            <div class="field"><label>Colour style</label><div class="themes" id="themes"></div></div>
+            <div class="field"><label>Accent colour</label><div class="color-row" id="accents"></div></div>
+            <div class="field"><label>Fonts</label><div class="tiles fonts" id="fonts"></div></div>
+            <div class="field"><label>Header style</label><div class="tiles" data-page="hero"></div></div>
+            <div class="field"><label>Dish layout</label><div class="tiles" data-page="layout"></div></div>
+          </div>
+          <div class="ctrl-group"><h3>Content</h3>
+            <div class="field"><label for="announcement">Announcement banner</label><input id="announcement" data-pg="announcement" type="text" maxlength="140" placeholder="🍹 Happy hour 5–7 pm · 2-for-1 cocktails"><div class="hint">Shown at the top of your menu. Leave empty to hide.</div></div>
+            <div class="grid2">
+              <div class="field"><label for="currency">Currency</label><input id="currency" data-pg="currency" type="text" maxlength="12" placeholder="LKR, $, €…"><div class="hint">Shown before prices that are plain numbers.</div></div>
+              <div class="field"><label>Show first</label><div class="chips" data-page="order"></div></div>
+            </div>
+            <label class="toggle"><input type="checkbox" data-pg="featured"> Show "Chef's picks" carousel for featured dishes</label>
+            <label class="toggle" style="margin-top:10px"><input type="checkbox" data-pg="search"> Show dish search box</label>
+          </div>
+          <div class="ctrl-group"><h3>Guest info</h3>
+            <div class="grid2">
+              <div class="field"><label for="phone">Phone</label><input id="phone" name="phone" type="tel" maxlength="40" placeholder="+94 77 123 4567"></div>
+              <div class="field"><label for="wifi">Guest Wi-Fi password</label><input id="wifi" name="wifi" type="text" maxlength="60" placeholder="Optional"></div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label for="address">Address</label><textarea id="address" name="address" maxlength="300" rows="2"></textarea></div>
+              <div class="field"><label for="hours">Opening hours</label><textarea id="hours" name="hours" maxlength="300" rows="2" placeholder="Mon–Sun · 11:00 – 22:00"></textarea></div>
+            </div>
+          </div>
+          <div class="ctrl-group"><h3>Social &amp; links</h3>
+            <div class="grid2">
+              <div class="field"><label for="instagram">Instagram</label><input id="instagram" data-pg="instagram" type="text" maxlength="200" placeholder="instagram.com/yourplace"></div>
+              <div class="field"><label for="facebook">Facebook</label><input id="facebook" data-pg="facebook" type="text" maxlength="200" placeholder="facebook.com/yourplace"></div>
+              <div class="field"><label for="website">Website</label><input id="website" data-pg="website" type="text" maxlength="200" placeholder="yourplace.com"></div>
+              <div class="field"><label for="whatsapp">WhatsApp number</label><input id="whatsapp" data-pg="whatsapp" type="tel" maxlength="30" placeholder="+94 77 123 4567"></div>
+            </div>
+          </div>
+          <div class="ctrl-group"><h3>Menu link</h3>
+            <div class="slug-row"><span id="slugBase"></span><input id="slug" name="slug" type="text" maxlength="40"></div>
+            <div class="hint">⚠️ Changing this changes your QR code — printed codes with the old link will stop working.</div>
+          </div>
+        </form>
+        <div class="phone-wrap"><div class="phone"><iframe id="previewFrame" title="Menu preview"></iframe></div>
+          <p class="hint" style="text-align:center">Live preview · <a id="previewBtn" target="_blank" rel="noopener">open full page ↗</a></p></div>
+      </div>
     </section>
 
     <!-- QR -->
@@ -72,21 +112,31 @@
         <div>
           <div class="ctrl-group"><h3>Presets</h3><div class="presets" id="presets"></div></div>
           <div class="ctrl-group"><h3>Pattern</h3>
-            <div class="field"><label>Dot style</label><div class="chips" data-chips="dotsType"></div></div>
+            <div class="field"><label>Dot pattern</label><div class="shape-grid" data-shapes="dotShape"></div></div>
+            <div class="field" id="dotScaleField"><label>Dot size</label><input type="range" min="0.55" max="1" step="0.05" data-k="dotScale"></div>
             <div class="row">
-              <div class="field"><label>Colour</label><div class="row" style="gap:8px"><input type="color" data-k="dotsColor"><label class="toggle"><input type="checkbox" data-k="gradient"> Gradient</label><input type="color" data-k="dotsColor2" class="grad-only"></div></div>
-              <div class="field grad-only"><label>Gradient type</label><select data-k="gradientType"><option value="linear">Linear</option><option value="radial">Radial</option></select></div>
+              <div class="field"><label>Fill</label><select data-k="gradient"><option value="none">Solid colour</option><option value="linear">Linear gradient</option><option value="radial">Radial gradient</option></select></div>
+              <div class="field"><label>Colour</label><div class="row" style="gap:8px"><input type="color" data-k="dotColor"><input type="color" data-k="dotColor2" class="grad-only" title="Second colour"></div></div>
+              <div class="field grad-only lin-only"><label>Angle</label><input type="range" min="0" max="360" step="15" data-k="gradAngle"></div>
             </div>
           </div>
-          <div class="ctrl-group"><h3>Corners</h3>
-            <div class="field"><label>Outer corner style</label><div class="chips" data-chips="cornerSquareType"></div></div>
-            <div class="field"><label>Inner corner style</label><div class="chips" data-chips="cornerDotType"></div></div>
-            <div class="row"><div class="field"><label>Outer colour</label><input type="color" data-k="cornerSquareColor"></div><div class="field"><label>Inner colour</label><input type="color" data-k="cornerDotColor"></div><div class="field"><label>Background</label><input type="color" data-k="bgColor"></div></div>
+          <div class="ctrl-group"><h3>Corner eyes</h3>
+            <div class="field"><label>Outer shape</label><div class="shape-grid" data-shapes="eyeFrame"></div></div>
+            <div class="field"><label>Inner shape</label><div class="shape-grid" data-shapes="eyeBall"></div></div>
+            <div class="row"><div class="field"><label>Outer colour</label><input type="color" data-k="eyeFrameColor"></div><div class="field"><label>Inner colour</label><input type="color" data-k="eyeBallColor"></div><div class="field"><label>Background</label><input type="color" data-k="bgColor"></div></div>
           </div>
-          <div class="ctrl-group"><h3>Logo</h3>
-            <label class="toggle"><input type="checkbox" data-k="logo"> Show my restaurant logo in the centre</label>
-            <div class="hint" id="noLogoHint">Upload a logo on the <a href="#profile">Restaurant page</a> tab first.</div>
-            <div class="field" style="margin-top:12px"><label>Logo size</label><input type="range" min="0.2" max="0.45" step="0.01" data-k="logoSize"></div>
+          <div class="ctrl-group"><h3>Logo in the centre</h3>
+            <div class="field"><div class="chips" data-chips="logoSrc"></div></div>
+            <div class="img-up logo-custom hidden" style="margin-bottom:14px"><div class="preview" id="qrLogoPrev"></div><div>
+              <button type="button" class="btn btn-ghost btn-sm" data-up="qr_logo">Upload QR logo</button>
+              <button type="button" class="btn btn-danger btn-sm hidden" data-rm="qr_logo">Remove</button>
+              <div class="hint">PNG with a transparent background looks best.</div></div></div>
+            <div class="hint hidden" id="noLogoHint" style="margin-bottom:12px">You haven't uploaded a restaurant logo yet — add one on the <a href="#design">Menu page design</a> tab, or choose "Upload custom".</div>
+            <div class="logo-opts">
+              <div class="field"><label>Logo size</label><input type="range" min="0.15" max="0.32" step="0.01" data-k="logoSize"></div>
+              <div class="field"><label>Logo shape</label><div class="chips" data-chips="logoShape"></div></div>
+              <label class="toggle"><input type="checkbox" data-k="logoPlate"> Background behind logo</label>
+            </div>
           </div>
           <div class="ctrl-group"><h3>Frame &amp; text</h3>
             <div class="field"><label>Frame style</label><div class="chips" data-chips="frame"></div></div>
@@ -99,8 +149,8 @@
           </div>
           <div class="ctrl-group"><h3>Advanced</h3>
             <div class="field"><label>Error correction</label><select data-k="ecl">
-              <option value="M">Medium (cleanest look)</option><option value="Q">Quartile (recommended)</option><option value="H">High (best with a logo)</option></select>
-              <div class="hint">Higher correction keeps the code scannable when it's scratched, small, or has a logo.</div></div>
+              <option value="M">Medium (cleanest look)</option><option value="Q">Quartile (recommended)</option><option value="H">High (most robust)</option></select>
+              <div class="hint">Higher correction keeps the code scannable when it's scratched or small. Logos automatically use a safe level.</div></div>
           </div>
         </div>
         <div class="qr-preview-wrap">
@@ -125,7 +175,34 @@
     </section>
   </main>
 </div>
+
+<dialog id="dishDlg" class="dlg">
+  <form id="dishForm" method="dialog">
+    <div class="dlg-head"><h2 id="dishDlgTitle">Add dish</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div class="dlg-body">
+      <label class="photo-drop" id="photoDrop">
+        <input type="file" id="photoInput" accept="image/*" hidden>
+        <div class="photo-empty"><svg width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-9 8"/></svg><strong>Add a photo</strong><span>Drop an image or click · we'll optimise it for phones</span></div>
+        <img id="photoPrev" alt="" hidden>
+      </label>
+      <button type="button" class="btn btn-ghost btn-sm hidden" id="removePhoto" style="margin:-6px 0 14px">Remove photo</button>
+      <div class="grid2">
+        <div class="field"><label for="dName">Dish name</label><input id="dName" name="name" type="text" maxlength="80" required placeholder="Lagoon crab curry"></div>
+        <div class="field"><label for="dPrice">Price</label><input id="dPrice" name="price" type="text" maxlength="24" placeholder="4,500"></div>
+      </div>
+      <div class="field"><label for="dCat">Category</label><input id="dCat" name="category" type="text" maxlength="40" list="catList" placeholder="Starters, Mains, Desserts, Drinks…"><datalist id="catList"></datalist></div>
+      <div class="field"><label for="dDesc">Description</label><textarea id="dDesc" name="description" maxlength="400" rows="3" placeholder="Fresh mud crab simmered in roasted Jaffna curry, served with pol roti."></textarea></div>
+      <div class="field"><label>Labels</label><div class="chips" id="tagChips"></div></div>
+      <div class="row"><label class="toggle"><input type="checkbox" name="featured" id="dFeat"> ⭐ Feature in "Chef's picks"</label>
+        <label class="toggle"><input type="checkbox" name="available" id="dAvail" checked> Available today</label></div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary" id="dishSave">Save dish</button></div>
+  </form>
+</dialog>
+<input type="file" id="imgInput" accept="image/*" hidden>
+
 <script src="/js/common.js"></script>
-<script src="/vendor/qr-code-styling.js"></script>
+<script src="/vendor/qrcode.js"></script>
+<script src="/js/qr-render.js"></script>
 <script type="module" src="/js/dashboard.js"></script>
 </body></html>

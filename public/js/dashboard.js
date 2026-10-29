@@ -5,6 +5,7 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 let me, R;
 
+const TABS = ['dishes', 'menus', 'design', 'qr', 'insights'];
 const THEME_META = {
   elegant: { label: 'Elegant', bg: '#faf6ef', fg: '#2b2620', font: 'Georgia, serif' },
   modern: { label: 'Modern', bg: '#ffffff', fg: '#111', font: 'Inter, sans-serif' },
@@ -13,6 +14,20 @@ const THEME_META = {
   fresh: { label: 'Fresh', bg: '#eef8f3', fg: '#16352a', font: 'Inter, sans-serif' },
 };
 const ACCENTS = ['#c8553d', '#d9480f', '#e8590c', '#c2255c', '#862e9c', '#3b5bdb', '#0b7285', '#2b8a3e', '#5c940d', '#b08900', '#1f1b16'];
+const FONTS = {
+  auto: ['Style default', 'Georgia, serif'], classic: ['Classic', '"Playfair Display", serif'], elegant: ['Elegant', '"Cormorant Garamond", serif'],
+  modern: ['Modern', 'Inter, sans-serif'], friendly: ['Friendly', 'Poppins, sans-serif'], bold: ['Bold', 'Oswald, sans-serif'], script: ['Script', '"Dancing Script", cursive'],
+};
+const PAGE_TILES = {
+  hero: [['full', 'Full photo', '<rect x="2" y="2" width="36" height="20" rx="2" fill="var(--a)"/><circle cx="20" cy="17" r="4" fill="#fff"/><rect x="6" y="26" width="28" height="3" rx="1.5" fill="#ccc"/><rect x="6" y="32" width="20" height="3" rx="1.5" fill="#ddd"/>'],
+    ['compact', 'Compact', '<rect x="2" y="2" width="36" height="11" rx="2" fill="var(--a)"/><circle cx="9" cy="13" r="4" fill="#fff" stroke="#ddd"/><rect x="15" y="16" width="18" height="3" rx="1.5" fill="#999"/><rect x="6" y="24" width="28" height="3" rx="1.5" fill="#ccc"/><rect x="6" y="30" width="20" height="3" rx="1.5" fill="#ddd"/>'],
+    ['minimal', 'Minimal', '<circle cx="20" cy="10" r="5" fill="var(--a)"/><rect x="10" y="18" width="20" height="3" rx="1.5" fill="#999"/><rect x="6" y="26" width="28" height="3" rx="1.5" fill="#ccc"/><rect x="6" y="32" width="20" height="3" rx="1.5" fill="#ddd"/>']],
+  layout: [['grid', 'Grid', '<rect x="3" y="3" width="16" height="14" rx="2" fill="var(--a)" opacity=".7"/><rect x="21" y="3" width="16" height="14" rx="2" fill="var(--a)" opacity=".7"/><rect x="3" y="20" width="12" height="2.5" rx="1" fill="#999"/><rect x="21" y="20" width="12" height="2.5" rx="1" fill="#999"/><rect x="3" y="26" width="16" height="10" rx="2" fill="var(--a)" opacity=".4"/><rect x="21" y="26" width="16" height="10" rx="2" fill="var(--a)" opacity=".4"/>'],
+    ['list', 'List', '<rect x="3" y="4" width="20" height="3" rx="1.5" fill="#999"/><rect x="3" y="9" width="14" height="2" rx="1" fill="#ccc"/><rect x="28" y="3" width="9" height="9" rx="2" fill="var(--a)" opacity=".7"/><rect x="3" y="17" width="20" height="3" rx="1.5" fill="#999"/><rect x="3" y="22" width="14" height="2" rx="1" fill="#ccc"/><rect x="28" y="16" width="9" height="9" rx="2" fill="var(--a)" opacity=".7"/><rect x="3" y="30" width="20" height="3" rx="1.5" fill="#999"/><rect x="28" y="29" width="9" height="9" rx="2" fill="var(--a)" opacity=".7"/>'],
+    ['magazine', 'Magazine', '<rect x="3" y="3" width="34" height="18" rx="2" fill="var(--a)" opacity=".7"/><rect x="3" y="24" width="22" height="3" rx="1.5" fill="#999"/><rect x="3" y="30" width="30" height="2" rx="1" fill="#ccc"/><rect x="3" y="35" width="26" height="2" rx="1" fill="#ccc"/>']],
+};
+const ORDER = [['dishes', 'Dish photos'], ['pdf', 'PDF menus']];
+const TAGS = { chef: '👨‍🍳 Chef\'s special', popular: '🔥 Popular', new: '✨ New', veg: '🌱 Vegetarian', vegan: '🥬 Vegan', spicy: '🌶️ Spicy', gf: '🌾 Gluten-free', seafood: '🦐 Seafood' };
 
 function menuUrl() { return `${me.publicUrl || location.origin}/m/${R.slug}`; }
 
@@ -20,7 +35,7 @@ function menuUrl() { return `${me.publicUrl || location.origin}/m/${R.slug}`; }
 async function load() {
   try { me = await api('/api/me'); } catch (e) { if (e.status === 401 || e.status === 404) return location.replace('/login'); throw e; }
   R = me.restaurant;
-  refreshLinks(); renderMenus(); fillProfile(); initQr(); renderInsights();
+  refreshLinks(); renderDishes(); renderMenus(); fillDesign(); initQr(); renderInsights();
   showTab();
 }
 function refreshLinks() {
@@ -30,17 +45,125 @@ function refreshLinks() {
   $('#slugBase').textContent = `${(me.publicUrl || location.origin).replace(/^https?:\/\//, '')}/m/`;
 }
 function showTab() {
-  const t = (location.hash || '#menus').slice(1);
-  const tab = ['menus', 'profile', 'qr', 'insights'].includes(t) ? t : 'menus';
+  let t = (location.hash || '#dishes').slice(1);
+  if (t === 'profile') t = 'design';
+  const tab = TABS.includes(t) ? t : 'dishes';
   $$('.tab').forEach(el => el.classList.toggle('hidden', el.id !== 'tab-' + tab));
   $$('.side a[data-tab]').forEach(a => a.classList.toggle('active', a.dataset.tab === tab));
   if (tab === 'qr') renderQr();
+  if (tab === 'design') loadPreview();
   window.scrollTo({ top: 0 });
 }
 window.addEventListener('hashchange', showTab);
 $('#logout').onclick = async () => { await api('/api/logout', { method: 'POST' }); location.href = '/'; };
+function flash(sel) { const el = $(sel); el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 1800); }
 
-// ---------- Menus ----------
+// Downscale images in the browser so guests get fast-loading photos
+async function resizeImage(file, max, keepPng) {
+  let bmp;
+  try { bmp = await createImageBitmap(file); } catch { throw new Error('This image format is not supported. Please use JPG or PNG.'); }
+  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  const ctx = c.getContext('2d');
+  const png = keepPng && file.type === 'image/png';
+  if (!png) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); }
+  ctx.drawImage(bmp, 0, 0, c.width, c.height);
+  const blob = await new Promise(r => c.toBlob(r, png ? 'image/png' : 'image/jpeg', .86));
+  return new File([blob], png ? 'image.png' : 'image.jpg', { type: blob.type });
+}
+
+// ---------- Dishes ----------
+function priceText(p) { return p && /^[\d.,\s]+$/.test(p) && R.page.currency ? `${R.page.currency} ${p}` : p; }
+function renderDishes() {
+  const box = $('#dishList');
+  if (!R.dishes.length) {
+    box.innerHTML = `<div class="empty-state"><div class="big">🍽️</div><h3>Show off your food</h3><p>Dishes with photos get far more attention than text menus. Add your signature dishes to get started.</p><button class="btn btn-primary" onclick="document.getElementById('addDish').click()">＋ Add your first dish</button></div>`;
+    return;
+  }
+  const groups = {};
+  R.dishes.forEach((d, i) => (groups[d.category || 'Uncategorised'] ||= []).push({ ...d, i }));
+  box.innerHTML = Object.entries(groups).map(([cat, list]) => `<h3 class="cat-head">${esc(cat)} <span>${list.length}</span></h3>
+    <div class="dish-grid">${list.map(d => `
+      <div class="dish-card${d.available ? '' : ' off'}" data-id="${d.id}">
+        <div class="dish-img" ${d.photo ? `style="background-image:url('${d.photo}')"` : ''}>${d.photo ? '' : '<span>No photo</span>'}
+          ${d.featured ? '<em class="feat">⭐ Featured</em>' : ''}${d.available ? '' : '<em class="sold">Unavailable</em>'}</div>
+        <div class="dish-body"><div class="dish-top"><strong>${esc(d.name)}</strong><b>${esc(priceText(d.price))}</b></div>
+          ${d.tags.length ? `<div class="mini-tags">${d.tags.map(t => `<span>${TAGS[t]}</span>`).join('')}</div>` : ''}
+          <div class="dish-actions">
+            <button class="btn btn-ghost btn-sm" data-edit>Edit</button>
+            <button class="icon-btn" data-dmove="up" title="Move up" ${d.i === 0 ? 'disabled' : ''}>↑</button>
+            <button class="icon-btn" data-dmove="down" title="Move down" ${d.i === R.dishes.length - 1 ? 'disabled' : ''}>↓</button>
+            <button class="icon-btn danger" data-ddel title="Delete">✕</button>
+          </div></div></div>`).join('')}</div>`).join('');
+  $('#catList').innerHTML = [...new Set(R.dishes.map(d => d.category).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('');
+}
+$('#dishList').addEventListener('click', async e => {
+  const card = e.target.closest('.dish-card'); if (!card) return;
+  const id = +card.dataset.id;
+  try {
+    if (e.target.closest('[data-edit]') || e.target.closest('.dish-img')) openDish(R.dishes.find(d => d.id === id));
+    else if (e.target.closest('[data-dmove]')) { R = (await api(`/api/dishes/${id}/move`, { method: 'POST', body: { dir: e.target.closest('[data-dmove]').dataset.dmove } })).restaurant; renderDishes(); }
+    else if (e.target.closest('[data-ddel]')) {
+      if (!confirm('Delete this dish?')) return;
+      R = (await api(`/api/dishes/${id}`, { method: 'DELETE' })).restaurant; renderDishes(); toast('Dish deleted');
+    }
+  } catch (x) { toast(x.message); }
+});
+
+const dlg = $('#dishDlg');
+let editing = null, photoFile = null, removePhoto = false, dishTags = [];
+$('#tagChips').innerHTML = Object.entries(TAGS).map(([k, v]) => `<button type="button" class="chip" data-tag="${k}">${v}</button>`).join('');
+$('#tagChips').onclick = e => {
+  const c = e.target.closest('[data-tag]'); if (!c) return;
+  const t = c.dataset.tag; dishTags = dishTags.includes(t) ? dishTags.filter(x => x !== t) : [...dishTags, t]; paintTags();
+};
+function paintTags() { $$('#tagChips .chip').forEach(c => c.classList.toggle('sel', dishTags.includes(c.dataset.tag))); }
+function showPhoto(src) {
+  const img = $('#photoPrev');
+  img.hidden = !src; if (src) img.src = src;
+  $('.photo-empty').hidden = !!src; $('#removePhoto').classList.toggle('hidden', !src);
+}
+function openDish(d) {
+  editing = d || null; photoFile = null; removePhoto = false; dishTags = d ? [...d.tags] : [];
+  $('#dishDlgTitle').textContent = d ? 'Edit dish' : 'Add dish';
+  const f = $('#dishForm');
+  f.name.value = d?.name || ''; f.price.value = d?.price || ''; f.category.value = d?.category || (R.dishes.at(-1)?.category || '');
+  f.description.value = d?.description || ''; f.featured.checked = !!d?.featured; f.available.checked = d ? d.available : true;
+  showPhoto(d?.photo); paintTags();
+  dlg.showModal(); setTimeout(() => f.name.focus(), 50);
+}
+$('#addDish').onclick = () => openDish(null);
+dlg.addEventListener('click', e => { if (e.target.closest('[data-close]') || e.target === dlg) dlg.close(); });
+async function pickPhoto(file) {
+  if (!file) return;
+  try { photoFile = await resizeImage(file, 1400); removePhoto = false; showPhoto(URL.createObjectURL(photoFile)); }
+  catch (x) { toast(x.message); }
+}
+$('#photoInput').onchange = e => { pickPhoto(e.target.files[0]); e.target.value = ''; };
+const pd = $('#photoDrop');
+['dragenter', 'dragover'].forEach(ev => pd.addEventListener(ev, e => { e.preventDefault(); pd.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => pd.addEventListener(ev, e => { e.preventDefault(); pd.classList.remove('over'); }));
+pd.addEventListener('drop', e => pickPhoto(e.dataTransfer.files[0]));
+$('#removePhoto').onclick = () => { photoFile = null; removePhoto = true; showPhoto(null); };
+$('#dishForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target, btn = $('#dishSave');
+  if (!f.name.value.trim()) return f.name.focus();
+  const fd = new FormData();
+  for (const k of ['name', 'price', 'category', 'description']) fd.append(k, f[k].value);
+  fd.append('featured', f.featured.checked); fd.append('available', f.available.checked);
+  fd.append('tags', JSON.stringify(dishTags));
+  if (removePhoto) fd.append('removePhoto', 'true');
+  if (photoFile) fd.append('file', photoFile);
+  btn.disabled = true;
+  try {
+    R = (await api(editing ? `/api/dishes/${editing.id}` : '/api/dishes', { method: editing ? 'PUT' : 'POST', body: fd })).restaurant;
+    dlg.close(); renderDishes(); toast(editing ? 'Dish updated' : 'Dish added 🎉');
+  } catch (x) { toast(x.message); }
+  btn.disabled = false;
+});
+
+// ---------- PDF Menus ----------
 const thumbCache = new Map();
 async function thumb(url, el) {
   try {
@@ -48,9 +171,7 @@ async function thumb(url, el) {
       thumbCache.set(url, (async () => {
         const pdf = await pdfjsLib.getDocument(url).promise;
         const page = await pdf.getPage(1);
-        const vp = page.getViewport({ scale: 1 });
-        const scale = 140 / vp.width;
-        const v = page.getViewport({ scale });
+        const v = page.getViewport({ scale: 140 / page.getViewport({ scale: 1 }).width });
         const c = document.createElement('canvas'); c.width = v.width; c.height = v.height;
         await page.render({ canvasContext: c.getContext('2d'), viewport: v }).promise;
         return { url: c.toDataURL('image/jpeg', .8), pages: pdf.numPages };
@@ -64,7 +185,7 @@ async function thumb(url, el) {
 function fmtSize(b) { return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
 function renderMenus() {
   const ul = $('#menuList');
-  if (!R.menus.length) { ul.innerHTML = '<li class="empty">No menus yet — upload your first PDF above.</li>'; return; }
+  if (!R.menus.length) { ul.innerHTML = '<li class="empty">No PDF menus yet. PDFs are optional if you use dish photos.</li>'; return; }
   ul.innerHTML = R.menus.map((m, i) => `
     <li class="menu-item" data-id="${m.id}">
       <div class="menu-thumb">📄</div>
@@ -94,7 +215,6 @@ $('#menuList').addEventListener('change', async e => {
   try { R = (await api(`/api/menus/${li.dataset.id}`, { method: 'PUT', body: { title: e.target.value } })).restaurant; toast('Menu renamed'); }
   catch (x) { toast(x.message); renderMenus(); }
 });
-
 function uploadPdf(file) {
   if (!file) return;
   if (file.type !== 'application/pdf') return toast('Please choose a PDF file.');
@@ -117,147 +237,195 @@ $('#pdfInput').onchange = e => uploadPdf(e.target.files[0]);
 ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => uploadPdf(e.dataTransfer.files[0]));
 
-// ---------- Profile ----------
-let selTheme, selAccent;
-function fillProfile() {
+// ---------- Menu page design ----------
+let draft; // unsaved copy of the restaurant settings, drives the live preview
+function fillDesign() {
+  draft = { theme: R.theme, accent: R.accent, page: { ...R.page } };
   const f = $('#profileForm');
   ['name', 'tagline', 'address', 'phone', 'hours', 'wifi', 'slug'].forEach(k => f[k].value = R[k] || '');
-  selTheme = R.theme; selAccent = R.accent;
+  $$('[data-pg]').forEach(el => { const v = R.page[el.dataset.pg]; if (el.type === 'checkbox') el.checked = !!v; else el.value = v || ''; });
   $('#themes').innerHTML = Object.entries(THEME_META).map(([k, t]) =>
     `<div class="theme-opt" data-theme="${k}"><div class="sw" style="background:${t.bg};color:${t.fg};font-family:${t.font}">Aa<span style="width:24px;height:4px;border-radius:2px;margin-top:4px;background:var(--acc)"></span></div>${t.label}</div>`).join('');
   $('#accents').innerHTML = ACCENTS.map(c => `<span class="swatch" data-c="${c}" style="background:${c}"></span>`).join('') +
     `<input type="color" id="accentCustom" title="Custom colour">`;
-  paintProfileSel(); paintImages();
+  $('#fonts').innerHTML = Object.entries(FONTS).map(([k, [l, fam]]) => `<div class="tile" data-font="${k}"><b style="font-family:${fam}">Aa</b>${l}</div>`).join('');
+  for (const [k, opts] of Object.entries(PAGE_TILES)) $(`[data-page="${k}"]`).innerHTML = opts.map(([v, l, svg]) => `<div class="tile" data-v="${v}"><svg viewBox="0 0 40 40" width="54" height="54">${svg}</svg>${l}</div>`).join('');
+  $('[data-page="order"]').innerHTML = ORDER.map(([v, l]) => `<button type="button" class="chip" data-v="${v}">${l}</button>`).join('');
+  paintDesign(); paintImages();
 }
-function paintProfileSel() {
-  $$('.theme-opt').forEach(el => { el.classList.toggle('sel', el.dataset.theme === selTheme); el.style.setProperty('--acc', selAccent); });
-  $$('.swatch').forEach(el => el.classList.toggle('sel', el.dataset.c === selAccent));
-  $('#accentCustom').value = selAccent;
+function paintDesign() {
+  $$('.theme-opt').forEach(el => { el.classList.toggle('sel', el.dataset.theme === draft.theme); el.style.setProperty('--acc', draft.accent); });
+  $$('.swatch').forEach(el => el.classList.toggle('sel', el.dataset.c === draft.accent));
+  $('#accentCustom').value = draft.accent;
+  $$('#fonts .tile').forEach(el => el.classList.toggle('sel', el.dataset.font === draft.page.font));
+  $$('#tab-design [data-page]').forEach(g => { g.style.setProperty('--a', draft.accent); g.querySelectorAll('[data-v]').forEach(el => el.classList.toggle('sel', el.dataset.v === draft.page[g.dataset.page])); });
 }
 function paintImages() {
-  for (const k of ['logo', 'cover']) {
-    $(`#${k}Prev`).style.backgroundImage = R[k] ? `url("${R[k]}")` : '';
+  for (const k of ['logo', 'cover', 'qr_logo']) {
+    const prev = $(`#${k === 'qr_logo' ? 'qrLogo' : k}Prev`);
+    prev.style.backgroundImage = R[k] ? `url("${R[k]}")` : '';
     $(`[data-rm="${k}"]`).classList.toggle('hidden', !R[k]);
   }
 }
-$('#themes').onclick = e => { const t = e.target.closest('[data-theme]'); if (t) { selTheme = t.dataset.theme; paintProfileSel(); } };
-$('#accents').addEventListener('click', e => { const s = e.target.closest('.swatch'); if (s) { selAccent = s.dataset.c; paintProfileSel(); } });
-$('#accents').addEventListener('input', e => { if (e.target.id === 'accentCustom') { selAccent = e.target.value; paintProfileSel(); } });
-$('#profileForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  const body = Object.fromEntries(new FormData(e.target)); body.theme = selTheme; body.accent = selAccent;
+function currentDraft() {
+  const f = $('#profileForm'), out = { ...R, theme: draft.theme, accent: draft.accent, page: { ...draft.page } };
+  ['name', 'tagline', 'address', 'phone', 'hours', 'wifi'].forEach(k => out[k] = f[k].value);
+  $$('[data-pg]').forEach(el => out.page[el.dataset.pg] = el.type === 'checkbox' ? el.checked : el.value);
+  return out;
+}
+let previewLoaded = false, previewTimer;
+function loadPreview() {
+  const fr = $('#previewFrame');
+  if (!previewLoaded) { fr.src = `/m/${R.slug}?preview=1`; previewLoaded = true; fr.onload = () => pushPreview(); }
+  else pushPreview();
+}
+function pushPreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => $('#previewFrame').contentWindow?.postMessage({ type: 'menuqr-preview', restaurant: currentDraft() }, location.origin), 80);
+}
+$('#tab-design').addEventListener('click', e => {
+  const th = e.target.closest('[data-theme]'), sw = e.target.closest('.swatch'), fo = e.target.closest('[data-font]'), pg = e.target.closest('[data-page] [data-v]');
+  if (th) draft.theme = th.dataset.theme;
+  else if (sw) draft.accent = sw.dataset.c;
+  else if (fo) draft.page.font = fo.dataset.font;
+  else if (pg) draft.page[pg.closest('[data-page]').dataset.page] = pg.dataset.v;
+  else return;
+  paintDesign(); pushPreview();
+});
+$('#tab-design').addEventListener('input', e => {
+  if (e.target.id === 'accentCustom') { draft.accent = e.target.value; paintDesign(); }
+  pushPreview();
+});
+async function saveDesign() {
+  const d = currentDraft(), body = { ...d, slug: $('#profileForm').slug.value };
   const oldSlug = R.slug;
   if (body.slug && body.slug !== oldSlug && !confirm('Changing your menu link will break any QR codes you already printed. Continue?')) return;
   try {
     R = (await api('/api/restaurant', { method: 'PUT', body })).restaurant;
-    fillProfile(); refreshLinks(); flash('#savedMsg');
-    if (R.slug !== oldSlug) renderQr();
+    fillDesign(); refreshLinks(); renderDishes(); flash('#savedMsg'); toast('Menu page saved');
+    if (R.slug !== oldSlug) { previewLoaded = false; loadPreview(); }
   } catch (x) { toast(x.message); }
-});
+}
+$('#saveDesign').onclick = saveDesign;
+$('#profileForm').addEventListener('submit', e => { e.preventDefault(); saveDesign(); });
+
 let upField;
 document.addEventListener('click', async e => {
   const up = e.target.closest('[data-up]'), rm = e.target.closest('[data-rm]');
   if (up) { upField = up.dataset.up; $('#imgInput').click(); }
   if (rm) {
-    try { await api('/api/restaurant/' + rm.dataset.rm, { method: 'DELETE' }); R[rm.dataset.rm] = null; paintImages(); updateLogoHint(); renderQr(); }
-    catch (x) { toast(x.message); }
+    try {
+      await api('/api/restaurant/' + rm.dataset.rm.replace('_', '-'), { method: 'DELETE' });
+      R[rm.dataset.rm] = null; paintImages(); updateLogoUi(); renderQr(); pushPreview();
+    } catch (x) { toast(x.message); }
   }
 });
 $('#imgInput').onchange = async e => {
   const file = e.target.files[0]; e.target.value = ''; if (!file) return;
-  const fd = new FormData(); fd.append('file', file);
-  try { const { url } = await api('/api/restaurant/' + upField, { method: 'POST', body: fd }); R[upField] = url; paintImages(); updateLogoHint(); renderQr(); toast('Image uploaded'); }
-  catch (x) { toast(x.message); }
+  try {
+    const small = await resizeImage(file, upField === 'cover' ? 1800 : 700, upField !== 'cover');
+    const fd = new FormData(); fd.append('file', small);
+    const { url } = await api('/api/restaurant/' + upField.replace('_', '-'), { method: 'POST', body: fd });
+    R[upField] = url; paintImages(); updateLogoUi(); renderQr(); pushPreview(); toast('Image uploaded');
+  } catch (x) { toast(x.message); }
 };
-function flash(sel) { const el = $(sel); el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 1800); }
 
 // ---------- QR designer ----------
 const DEFAULT = {
-  dotsType: 'rounded', dotsColor: '#1f1b16', gradient: false, dotsColor2: '#d9480f', gradientType: 'linear',
-  cornerSquareType: 'extra-rounded', cornerSquareColor: '#1f1b16', cornerDotType: 'dot', cornerDotColor: '#d9480f',
-  bgColor: '#ffffff', logo: true, logoSize: 0.3, frame: 'card', caption: 'SCAN FOR MENU',
-  frameColor: '#1f1b16', frameTextColor: '#ffffff', showName: true, ecl: 'Q',
+  dotShape: 'rounded', dotScale: .9, dotColor: '#1f1b16', gradient: 'none', dotColor2: '#d9480f', gradAngle: 45,
+  eyeFrame: 'rounded', eyeBall: 'rounded', eyeFrameColor: '#1f1b16', eyeBallColor: '#d9480f', bgColor: '#ffffff',
+  logoSrc: 'restaurant', logoSize: .24, logoShape: 'original', logoPlate: true,
+  frame: 'card', caption: 'SCAN FOR MENU', frameColor: '#1f1b16', frameTextColor: '#ffffff', showName: true, ecl: 'Q',
 };
 const PRESETS = [
-  { name: 'Classic', d: { dotsType: 'square', dotsColor: '#000000', gradient: false, cornerSquareType: 'square', cornerSquareColor: '#000000', cornerDotType: 'square', cornerDotColor: '#000000', bgColor: '#ffffff', frameColor: '#000000', frameTextColor: '#ffffff' } },
+  { name: 'Classic', d: { dotShape: 'square', dotScale: 1, dotColor: '#000000', gradient: 'none', eyeFrame: 'square', eyeBall: 'square', eyeFrameColor: '#000000', eyeBallColor: '#000000', bgColor: '#ffffff', frameColor: '#000000', frameTextColor: '#ffffff' } },
   { name: 'Brand', brand: true },
-  { name: 'Ocean', d: { dotsType: 'classy-rounded', dotsColor: '#0b7285', gradient: true, dotsColor2: '#1864ab', gradientType: 'linear', cornerSquareType: 'extra-rounded', cornerSquareColor: '#0b3d5c', cornerDotType: 'dot', cornerDotColor: '#1098ad', bgColor: '#ffffff', frameColor: '#0b3d5c', frameTextColor: '#ffffff' } },
-  { name: 'Sunset', d: { dotsType: 'dots', dotsColor: '#d9480f', gradient: true, dotsColor2: '#c2255c', gradientType: 'linear', cornerSquareType: 'extra-rounded', cornerSquareColor: '#c2255c', cornerDotType: 'dot', cornerDotColor: '#f76707', bgColor: '#fffaf5', frameColor: '#e8590c', frameTextColor: '#ffffff' } },
-  { name: 'Forest', d: { dotsType: 'rounded', dotsColor: '#2b8a3e', gradient: true, dotsColor2: '#1b4332', gradientType: 'radial', cornerSquareType: 'extra-rounded', cornerSquareColor: '#1b4332', cornerDotType: 'dot', cornerDotColor: '#2f9e44', bgColor: '#f8fcf8', frameColor: '#1b4332', frameTextColor: '#f8fcf8' } },
-  { name: 'Gold Luxe', d: { dotsType: 'classy', dotsColor: '#e9c46a', gradient: true, dotsColor2: '#b8860b', gradientType: 'linear', cornerSquareType: 'square', cornerSquareColor: '#e9c46a', cornerDotType: 'square', cornerDotColor: '#f4d58d', bgColor: '#141414', frameColor: '#141414', frameTextColor: '#e9c46a' } },
-  { name: 'Berry', d: { dotsType: 'extra-rounded', dotsColor: '#862e9c', gradient: true, dotsColor2: '#e64980', gradientType: 'linear', cornerSquareType: 'extra-rounded', cornerSquareColor: '#5f3dc4', cornerDotType: 'dot', cornerDotColor: '#e64980', bgColor: '#ffffff', frameColor: '#5f3dc4', frameTextColor: '#ffffff' } },
-  { name: 'Midnight', d: { dotsType: 'rounded', dotsColor: '#e9ecef', gradient: false, cornerSquareType: 'extra-rounded', cornerSquareColor: '#ffd43b', cornerDotType: 'dot', cornerDotColor: '#ffd43b', bgColor: '#0b1021', frameColor: '#0b1021', frameTextColor: '#ffd43b' } },
+  { name: 'Ocean', d: { dotShape: 'smooth', dotScale: 1, dotColor: '#0b7285', gradient: 'linear', dotColor2: '#1864ab', gradAngle: 45, eyeFrame: 'drop', eyeBall: 'drop', eyeFrameColor: '#0b3d5c', eyeBallColor: '#1098ad', bgColor: '#ffffff', frameColor: '#0b3d5c', frameTextColor: '#ffffff' } },
+  { name: 'Sunset', d: { dotShape: 'dots', dotScale: .9, dotColor: '#d9480f', gradient: 'linear', dotColor2: '#c2255c', gradAngle: 135, eyeFrame: 'circle', eyeBall: 'circle', eyeFrameColor: '#c2255c', eyeBallColor: '#d9480f', bgColor: '#fffaf5', frameColor: '#e8590c', frameTextColor: '#ffffff' } },
+  { name: 'Forest', d: { dotShape: 'classy', dotScale: 1, dotColor: '#2b8a3e', gradient: 'radial', dotColor2: '#1b4332', eyeFrame: 'leaf', eyeBall: 'leaf', eyeFrameColor: '#1b4332', eyeBallColor: '#2f9e44', bgColor: '#f8fcf8', frameColor: '#1b4332', frameTextColor: '#f8fcf8' } },
+  { name: 'Gold Luxe', d: { dotShape: 'diamond', dotScale: .95, dotColor: '#e9c46a', gradient: 'linear', dotColor2: '#b8860b', gradAngle: 90, eyeFrame: 'square', eyeBall: 'diamond', eyeFrameColor: '#e9c46a', eyeBallColor: '#f4d58d', bgColor: '#141414', frameColor: '#141414', frameTextColor: '#e9c46a' } },
+  { name: 'Sweetheart', d: { dotShape: 'heart', dotScale: 1, dotColor: '#c2255c', gradient: 'linear', dotColor2: '#862e9c', gradAngle: 45, eyeFrame: 'rounded', eyeBall: 'heart', eyeFrameColor: '#862e9c', eyeBallColor: '#e64980', bgColor: '#fff5f8', frameColor: '#a61e4d', frameTextColor: '#ffffff' } },
+  { name: 'Starry', d: { dotShape: 'star', dotScale: 1, dotColor: '#364fc7', gradient: 'radial', dotColor2: '#1c1f4a', eyeFrame: 'dotted', eyeBall: 'star', eyeFrameColor: '#1c1f4a', eyeBallColor: '#f59f00', bgColor: '#ffffff', frameColor: '#1c1f4a', frameTextColor: '#ffd43b' } },
+  { name: 'Lines', d: { dotShape: 'vlines', dotScale: .95, dotColor: '#1f1b16', gradient: 'linear', dotColor2: '#495057', gradAngle: 90, eyeFrame: 'rounded', eyeBall: 'circle', eyeFrameColor: '#1f1b16', eyeBallColor: '#e8590c', bgColor: '#ffffff', frameColor: '#e8590c', frameTextColor: '#ffffff' } },
+  { name: 'Midnight', d: { dotShape: 'random', dotScale: 1, dotColor: '#e9ecef', gradient: 'none', eyeFrame: 'rounded', eyeBall: 'circle', eyeFrameColor: '#ffd43b', eyeBallColor: '#ffd43b', bgColor: '#0b1021', frameColor: '#0b1021', frameTextColor: '#ffd43b' } },
 ];
+const SHAPE_LABELS = { square: 'Square', rounded: 'Rounded', dots: 'Dots', smooth: 'Fluid', classy: 'Classy', diamond: 'Diamond', star: 'Stars', heart: 'Hearts', plus: 'Plus', vlines: 'Vertical', hlines: 'Horizontal', random: 'Bubbles', circle: 'Circle', leaf: 'Leaf', drop: 'Drop', dotted: 'Dotted' };
 const CHIPS = {
-  dotsType: [['square', 'Square'], ['rounded', 'Rounded'], ['dots', 'Dots'], ['classy', 'Classy'], ['classy-rounded', 'Classy round'], ['extra-rounded', 'Smooth']],
-  cornerSquareType: [['square', 'Square'], ['extra-rounded', 'Rounded'], ['dot', 'Circle']],
-  cornerDotType: [['square', 'Square'], ['dot', 'Circle']],
+  logoSrc: [['none', 'No logo'], ['restaurant', 'Restaurant logo'], ['custom', 'Upload custom']],
+  logoShape: [['original', 'Original'], ['rounded', 'Rounded'], ['circle', 'Circle']],
   frame: [['none', 'None'], ['card', 'Card'], ['banner', 'Banner'], ['tent', 'Table tent']],
 };
-let D, qr, renderSeq = 0;
+const SHAPES = { dotShape: QRRender.DOTS, eyeFrame: QRRender.EYE_FRAMES, eyeBall: QRRender.EYE_BALLS };
+let D, renderSeq = 0;
 
 function initQr() {
   D = { ...DEFAULT, ...(R.qr_design || {}) };
-  if (!R.qr_design) applyBrand();
-  $('#presets').innerHTML = PRESETS.map((p, i) => {
-    const d = p.brand ? brandDesign() : p.d;
-    const fill = d.gradient ? `linear-gradient(135deg,${d.dotsColor},${d.dotsColor2})` : d.dotsColor;
-    return `<div class="preset" data-i="${i}"><div class="pv" style="background:${d.bgColor};display:grid;place-items:center;border:1px solid #eee"><span style="width:26px;height:26px;border-radius:${d.dotsType.includes('round') || d.dotsType === 'dots' ? '8px' : '2px'};background:${fill};outline:3px solid ${d.cornerSquareColor};outline-offset:3px"></span></div>${p.name}</div>`;
-  }).join('');
-  for (const [k, opts] of Object.entries(CHIPS)) {
-    $(`[data-chips="${k}"]`).innerHTML = opts.map(([v, l]) => `<button type="button" class="chip" data-v="${v}">${l}</button>`).join('');
-  }
-  qr = new QRCodeStyling({ type: 'canvas' });
-  syncControls(); updateLogoHint();
+  if (!R.qr_design) Object.assign(D, brandDesign());
+  for (const [k, opts] of Object.entries(CHIPS)) $(`[data-chips="${k}"]`).innerHTML = opts.map(([v, l]) => `<button type="button" class="chip" data-v="${v}">${l}</button>`).join('');
+  paintPresets(); syncControls(); updateLogoUi();
 }
 function brandDesign() {
-  return { dotsType: 'rounded', dotsColor: '#1f1b16', gradient: false, cornerSquareType: 'extra-rounded', cornerSquareColor: R.accent, cornerDotType: 'dot', cornerDotColor: R.accent, bgColor: '#ffffff', frameColor: R.accent, frameTextColor: '#ffffff' };
+  return { dotShape: 'rounded', dotScale: .9, dotColor: '#1f1b16', gradient: 'none', eyeFrame: 'rounded', eyeBall: 'rounded', eyeFrameColor: R.accent, eyeBallColor: R.accent, bgColor: '#ffffff', frameColor: R.accent, frameTextColor: '#ffffff' };
 }
-function applyBrand() { Object.assign(D, brandDesign()); }
-function updateLogoHint() { $('#noLogoHint').classList.toggle('hidden', !!R.logo); }
-
+function paintPresets() {
+  $('#presets').innerHTML = PRESETS.map((p, i) => {
+    const d = { ...DEFAULT, ...(p.brand ? brandDesign() : p.d) };
+    return `<div class="preset" data-i="${i}"><div class="pv" style="background:${d.bgColor}">${QRRender.toSVG({ ...d, logo: null, data: 'menuqr', margin: 1, ecl: 'L' }, 56)}</div>${p.name}</div>`;
+  }).join('');
+}
+function paintShapes() {
+  for (const [k, list] of Object.entries(SHAPES)) {
+    $(`[data-shapes="${k}"]`).innerHTML = list.map(v => {
+      const svg = k === 'dotShape' ? QRRender.swatch({ ...D, dotShape: v, bgColor: 'transparent', gradient: 'none', dotColor: '#1f1b16' }, 'dots', 40)
+        : QRRender.swatch({ [k]: v, color: '#1f1b16' }, k, 40);
+      return `<button type="button" class="shape${D[k] === v ? ' sel' : ''}" data-v="${v}" title="${SHAPE_LABELS[v]}">${svg}<span>${SHAPE_LABELS[v]}</span></button>`;
+    }).join('');
+  }
+}
 function syncControls() {
-  $$('[data-k]').forEach(el => { const v = D[el.dataset.k]; if (el.type === 'checkbox') el.checked = !!v; else el.value = v; });
+  $$('#tab-qr [data-k]').forEach(el => { const v = D[el.dataset.k]; if (el.type === 'checkbox') el.checked = !!v; else el.value = v; });
   $$('[data-chips]').forEach(g => g.querySelectorAll('.chip').forEach(c => c.classList.toggle('sel', c.dataset.v === D[g.dataset.chips])));
-  $$('.grad-only').forEach(el => el.classList.toggle('hidden', !D.gradient));
+  $$('.grad-only').forEach(el => el.classList.toggle('hidden', D.gradient === 'none'));
+  $$('.lin-only').forEach(el => el.classList.toggle('hidden', D.gradient !== 'linear'));
   $$('.frame-only').forEach(el => el.classList.toggle('hidden', D.frame === 'none'));
+  $('#dotScaleField').classList.toggle('hidden', ['smooth', 'classy'].includes(D.dotShape));
+  paintShapes(); updateLogoUi();
+}
+function logoUrl() { return D.logoSrc === 'restaurant' ? R.logo : D.logoSrc === 'custom' ? R.qr_logo : null; }
+function updateLogoUi() {
+  if (!D) return;
+  $('.logo-custom').classList.toggle('hidden', D.logoSrc !== 'custom');
+  $('#noLogoHint').classList.toggle('hidden', !(D.logoSrc === 'restaurant' && !R.logo));
+  $('.logo-opts').classList.toggle('hidden', !logoUrl());
 }
 $('#tab-qr').addEventListener('input', e => {
   const k = e.target.dataset.k; if (!k) return;
   D[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value;
-  syncControls(); renderQrSoon();
+  if (e.target.type === 'range' || e.target.type === 'color' || e.target.type === 'text') { $$('.grad-only').forEach(el => el.classList.toggle('hidden', D.gradient === 'none')); renderQrSoon(); }
+  else { syncControls(); renderQr(); }
 });
+$('#tab-qr').addEventListener('change', e => { if (e.target.type === 'color') paintShapes(); });
 $('#tab-qr').addEventListener('click', e => {
-  const chip = e.target.closest('.chip');
-  if (chip) { D[chip.closest('[data-chips]').dataset.chips] = chip.dataset.v; syncControls(); renderQr(); }
-  const pre = e.target.closest('.preset');
-  if (pre) { const p = PRESETS[pre.dataset.i]; Object.assign(D, p.brand ? brandDesign() : p.d); syncControls(); renderQr(); }
+  const chip = e.target.closest('[data-chips] .chip'), shape = e.target.closest('[data-shapes] .shape'), pre = e.target.closest('.preset');
+  if (chip) D[chip.closest('[data-chips]').dataset.chips] = chip.dataset.v;
+  else if (shape) D[shape.closest('[data-shapes]').dataset.shapes] = shape.dataset.v;
+  else if (pre) { const p = PRESETS[pre.dataset.i]; Object.assign(D, p.brand ? brandDesign() : p.d); }
+  else return;
+  syncControls(); renderQr();
 });
 $('#saveQr').onclick = async () => {
   try { await api('/api/qr-design', { method: 'PUT', body: D }); R.qr_design = { ...D }; flash('#qrSaved'); toast('QR design saved'); }
   catch (x) { toast(x.message); }
 };
 
-function qrOptions(size) {
-  const useLogo = D.logo && R.logo;
-  return {
-    width: size, height: size, type: 'canvas', data: menuUrl(), margin: 0,
-    qrOptions: { errorCorrectionLevel: useLogo && D.ecl === 'M' ? 'Q' : D.ecl },
-    image: useLogo ? R.logo : undefined,
-    imageOptions: { crossOrigin: 'anonymous', margin: Math.round(size * 0.012), imageSize: D.logoSize, hideBackgroundDots: true },
-    dotsOptions: D.gradient
-      ? { type: D.dotsType, color: D.dotsColor, gradient: { type: D.gradientType, rotation: Math.PI / 4, colorStops: [{ offset: 0, color: D.dotsColor }, { offset: 1, color: D.dotsColor2 }] } }
-      : { type: D.dotsType, color: D.dotsColor, gradient: undefined },
-    cornersSquareOptions: { type: D.cornerSquareType, color: D.cornerSquareColor },
-    cornersDotOptions: { type: D.cornerDotType, color: D.cornerDotColor },
-    backgroundOptions: { color: D.bgColor },
-  };
+const dataUrlCache = new Map();
+function toDataUrl(url) {
+  if (!dataUrlCache.has(url)) dataUrlCache.set(url, fetch(url).then(r => r.blob()).then(b => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); })));
+  return dataUrlCache.get(url);
 }
-async function qrImage(size) {
-  qr.update(qrOptions(size));
-  const blob = await qr.getRawData('png');
-  const img = new Image(); img.src = URL.createObjectURL(blob);
-  await img.decode(); return img;
+async function qrOpts() {
+  const url = logoUrl();
+  return { ...D, data: menuUrl(), logo: url ? await toDataUrl(url) : null };
 }
 function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
 function fitText(ctx, text, maxW, size, weight, family) {
@@ -268,8 +436,10 @@ function fitText(ctx, text, maxW, size, weight, family) {
 // Draws the full framed QR at the given QR pixel size; returns a canvas.
 async function compose(q) {
   await document.fonts.ready;
-  const img = await qrImage(q);
-  const u = q / 100, pad = 8 * u, quiet = 5 * u;
+  const opts = await qrOpts();
+  const img = await QRRender.toImage(opts, q);
+  // Scanners need a clear margin ("quiet zone") of a few modules around the code
+  const u = q / 100, pad = 8 * u, quiet = Math.max(5 * u, 3 * q / QRRender.count(opts));
   const name = D.showName ? R.name : '';
   const cap = D.caption || '';
   const c = document.createElement('canvas'), ctx = c.getContext('2d');
@@ -316,20 +486,20 @@ async function compose(q) {
     ctx.fillStyle = '#1f1b16'; const link = menuUrl().replace(/^https?:\/\//, '');
     fitText(ctx, link, c.width - pad * 2, 4.4 * u, 600, sans); ctx.fillText(link, c.width / 2, c.height - 8 * u);
   }
-  URL.revokeObjectURL(img.src);
   return c;
 }
 
 let soon;
-function renderQrSoon() { clearTimeout(soon); soon = setTimeout(renderQr, 120); }
+function renderQrSoon() { clearTimeout(soon); soon = setTimeout(renderQr, 60); }
 async function renderQr() {
-  if (!qr || $('#tab-qr').classList.contains('hidden')) return;
+  if (!D || $('#tab-qr').classList.contains('hidden')) return;
   const seq = ++renderSeq;
   const c = await compose(560);
   if (seq !== renderSeq) return;
   const out = $('#qrCanvas'); out.width = c.width; out.height = c.height;
   out.getContext('2d').drawImage(c, 0, 0);
   out.style.width = (c.height > c.width ? 300 : 340) + 'px';
+  out.dataset.rendered = seq;
   checkContrast();
 }
 function lum(hex) {
@@ -338,22 +508,21 @@ function lum(hex) {
 }
 function contrast(a, b) { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + .05) / (y + .05); }
 function checkContrast() {
-  const cols = [D.dotsColor, D.gradient ? D.dotsColor2 : D.dotsColor, D.cornerSquareColor];
+  const cols = [D.dotColor, D.gradient !== 'none' ? D.dotColor2 : D.dotColor, D.eyeFrameColor, D.eyeBallColor];
   const worst = Math.min(...cols.map(c => contrast(c, D.bgColor)));
-  const inverted = lum(D.dotsColor) > lum(D.bgColor);
+  const inverted = lum(D.dotColor) > lum(D.bgColor);
   const w = $('#contrastWarn');
   if (worst < 3) { w.textContent = '⚠️ Low contrast between the code and background — some phones may not scan it. Try darker dots or a lighter background.'; w.classList.remove('hidden'); }
   else if (inverted) { w.textContent = 'ℹ️ Light-on-dark codes look great but a few older scanner apps can struggle. Test with several phones.'; w.classList.remove('hidden'); }
   else w.classList.add('hidden');
 }
-function fileName(ext) { return `${R.slug}-menu-qr.${ext}`; }
-$('#dlPng').onclick = async () => {
-  const c = await compose(1600);
-  c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fileName('png'); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); });
-};
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+$('#dlPng').onclick = async () => { const c = await compose(1600); c.toBlob(b => download(b, `${R.slug}-menu-qr.png`)); };
 $('#dlSvg').onclick = async () => {
-  const svgQr = new QRCodeStyling({ ...qrOptions(1000), type: 'svg' });
-  if (svgQr.download) await svgQr.download({ name: fileName('svg').replace(/\.svg$/, ''), extension: 'svg' });
+  download(new Blob([QRRender.toSVG({ ...(await qrOpts()), margin: 3 }, 1024)], { type: 'image/svg+xml' }), `${R.slug}-menu-qr.svg`);
   toast('SVG contains the QR code only (no frame).');
 };
 $('#printQr').onclick = async () => {
@@ -365,7 +534,7 @@ $('#printQr').onclick = async () => {
     .g{display:grid;grid-template-columns:1fr 1fr;gap:8mm;justify-items:center;align-items:center;height:277mm}
     img{max-width:90mm;max-height:130mm;width:auto;height:auto}
     .tip{text-align:center;color:#888;font-size:11px}@media print{.tip{display:none}}</style>
-    <p class="tip">Cut along the edges and place on tables. Use “Fit to page” off / 100% scale.</p>
+    <p class="tip">Cut along the edges and place on tables. Print at 100% scale.</p>
     <div class="g">${`<img src="${url}">`.repeat(4)}</div>
     <script>window.onload=()=>setTimeout(()=>print(),300)<\/script>`);
   w.document.close();
