@@ -1,0 +1,23 @@
+{
+  "name": "qr-menu",
+  "version": "1.0.0",
+  "description": "Restaurants upload a PDF menu, design a branded QR code, and guests get a beautiful mobile menu.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --no-warnings server.js",
+    "dev": "node --watch --no-warnings server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.3.0",
+    "multer": "^2.5.0",
+    "pdfjs-dist": "^4.10.38",
+    "qr-code-styling": "^1.9.2"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "private": true
+}

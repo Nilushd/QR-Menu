@@ -1,0 +1,131 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Crect width=%2224%22 height=%2224%22 rx=%225%22 fill=%22%23d9480f%22/%3E%3Cpath fill=%22%23fff%22 d=%22M5 5h5v5H5zm9 0h5v5h-5zM5 14h5v5H5zm9 0h2v2h-2zm3 3h2v2h-2zm-3 0h2v2h-2z%22/%3E%3C/svg%3E">
+<title>Dashboard — MenuQR</title></head><body>
+<nav class="nav"><div class="container"><a class="logo" href="/"><span class="logo-mark"></span>MenuQR</a><div class="nav-links">
+  <a class="btn btn-ghost btn-sm" id="viewLive" target="_blank" rel="noopener">View live menu ↗</a>
+  <button class="btn btn-ghost btn-sm" id="logout">Log out</button></div></div></nav>
+
+<div class="dash">
+  <aside class="side">
+    <a href="#menus" data-tab="menus">📄 Menus</a>
+    <a href="#profile" data-tab="profile">🎨 Restaurant page</a>
+    <a href="#qr" data-tab="qr">🔳 QR code designer</a>
+    <a href="#insights" data-tab="insights">📈 Insights</a>
+    <div class="live">Your menu link:<br><a id="liveLink" target="_blank" rel="noopener"></a></div>
+  </aside>
+
+  <main>
+    <!-- MENUS -->
+    <section class="panel tab" id="tab-menus">
+      <div class="panel-head"><div><h2>Your menus</h2><p>Upload one or more PDF menus. Guests see them as tabs, in this order.</p></div></div>
+      <div class="field"><label for="menuTitle">Menu name (optional)</label><input id="menuTitle" type="text" maxlength="60" placeholder="e.g. Food, Drinks, Desserts, Today's specials"></div>
+      <label class="dropzone" id="drop">
+        <input type="file" id="pdfInput" accept="application/pdf" hidden>
+        <svg width="40" height="40" fill="none" stroke="#d9480f" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 12v6M9 15l3-3 3 3"/></svg>
+        <strong>Drop your menu PDF here or click to browse</strong><span>PDF up to 25 MB</span>
+        <div class="progress hidden" id="prog"><div></div></div>
+      </label>
+      <ul class="menu-list" id="menuList"></ul>
+    </section>
+
+    <!-- PROFILE -->
+    <section class="panel tab" id="tab-profile">
+      <div class="panel-head"><div><h2>Restaurant page</h2><p>This is what guests see when they scan your QR code.</p></div></div>
+      <form id="profileForm">
+        <div class="grid2">
+          <div class="field"><label>Logo</label><div class="img-up"><div class="preview" id="logoPrev"></div><div>
+            <button type="button" class="btn btn-ghost btn-sm" data-up="logo">Upload logo</button>
+            <button type="button" class="btn btn-danger btn-sm hidden" data-rm="logo">Remove</button><div class="hint">Square PNG/JPG works best.</div></div></div></div>
+          <div class="field"><label>Cover photo</label><div class="img-up"><div class="preview wide" id="coverPrev"></div><div>
+            <button type="button" class="btn btn-ghost btn-sm" data-up="cover">Upload cover</button>
+            <button type="button" class="btn btn-danger btn-sm hidden" data-rm="cover">Remove</button><div class="hint">A wide photo of your food or venue.</div></div></div></div>
+        </div>
+        <input type="file" id="imgInput" accept="image/png,image/jpeg,image/webp" hidden>
+        <div class="grid2">
+          <div class="field"><label for="name">Restaurant name</label><input id="name" name="name" type="text" maxlength="80" required></div>
+          <div class="field"><label for="tagline">Tagline</label><input id="tagline" name="tagline" type="text" maxlength="120" placeholder="Fresh seafood by the lagoon"></div>
+        </div>
+        <div class="field"><label for="slug">Menu link</label><div class="slug-row"><span id="slugBase"></span><input id="slug" name="slug" type="text" maxlength="40"></div>
+          <div class="hint">⚠️ Changing this changes your QR code — printed codes with the old link will stop working.</div></div>
+        <div class="grid2">
+          <div class="field"><label for="phone">Phone</label><input id="phone" name="phone" type="tel" maxlength="40" placeholder="+94 77 123 4567"></div>
+          <div class="field"><label for="wifi">Guest Wi-Fi password</label><input id="wifi" name="wifi" type="text" maxlength="60" placeholder="Optional"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="address">Address</label><textarea id="address" name="address" maxlength="300" rows="2"></textarea></div>
+          <div class="field"><label for="hours">Opening hours</label><textarea id="hours" name="hours" maxlength="300" rows="2" placeholder="Mon–Sun · 11:00 – 22:00"></textarea></div>
+        </div>
+        <div class="field"><label>Menu page style</label><div class="themes" id="themes"></div></div>
+        <div class="field"><label>Accent colour</label><div class="color-row" id="accents"></div></div>
+        <div class="save-bar"><span class="saved" id="savedMsg">✓ Saved</span><a class="btn btn-ghost" id="previewBtn" target="_blank" rel="noopener">Preview</a><button class="btn btn-primary" type="submit">Save changes</button></div>
+      </form>
+    </section>
+
+    <!-- QR -->
+    <section class="panel tab" id="tab-qr">
+      <div class="panel-head"><div><h2>QR code designer</h2><p>Make it yours. Changes preview instantly — save to keep your design.</p></div>
+        <div class="row" style="gap:8px"><span class="saved" id="qrSaved">✓ Saved</span><button class="btn btn-primary" id="saveQr">Save design</button></div></div>
+      <div class="qr-layout">
+        <div>
+          <div class="ctrl-group"><h3>Presets</h3><div class="presets" id="presets"></div></div>
+          <div class="ctrl-group"><h3>Pattern</h3>
+            <div class="field"><label>Dot style</label><div class="chips" data-chips="dotsType"></div></div>
+            <div class="row">
+              <div class="field"><label>Colour</label><div class="row" style="gap:8px"><input type="color" data-k="dotsColor"><label class="toggle"><input type="checkbox" data-k="gradient"> Gradient</label><input type="color" data-k="dotsColor2" class="grad-only"></div></div>
+              <div class="field grad-only"><label>Gradient type</label><select data-k="gradientType"><option value="linear">Linear</option><option value="radial">Radial</option></select></div>
+            </div>
+          </div>
+          <div class="ctrl-group"><h3>Corners</h3>
+            <div class="field"><label>Outer corner style</label><div class="chips" data-chips="cornerSquareType"></div></div>
+            <div class="field"><label>Inner corner style</label><div class="chips" data-chips="cornerDotType"></div></div>
+            <div class="row"><div class="field"><label>Outer colour</label><input type="color" data-k="cornerSquareColor"></div><div class="field"><label>Inner colour</label><input type="color" data-k="cornerDotColor"></div><div class="field"><label>Background</label><input type="color" data-k="bgColor"></div></div>
+          </div>
+          <div class="ctrl-group"><h3>Logo</h3>
+            <label class="toggle"><input type="checkbox" data-k="logo"> Show my restaurant logo in the centre</label>
+            <div class="hint" id="noLogoHint">Upload a logo on the <a href="#profile">Restaurant page</a> tab first.</div>
+            <div class="field" style="margin-top:12px"><label>Logo size</label><input type="range" min="0.2" max="0.45" step="0.01" data-k="logoSize"></div>
+          </div>
+          <div class="ctrl-group"><h3>Frame &amp; text</h3>
+            <div class="field"><label>Frame style</label><div class="chips" data-chips="frame"></div></div>
+            <div class="row frame-only">
+              <div class="field" style="flex:2"><label>Call to action</label><input type="text" data-k="caption" maxlength="30"></div>
+              <div class="field"><label>Frame colour</label><input type="color" data-k="frameColor"></div>
+              <div class="field"><label>Text colour</label><input type="color" data-k="frameTextColor"></div>
+            </div>
+            <label class="toggle frame-only"><input type="checkbox" data-k="showName"> Show restaurant name</label>
+          </div>
+          <div class="ctrl-group"><h3>Advanced</h3>
+            <div class="field"><label>Error correction</label><select data-k="ecl">
+              <option value="M">Medium (cleanest look)</option><option value="Q">Quartile (recommended)</option><option value="H">High (best with a logo)</option></select>
+              <div class="hint">Higher correction keeps the code scannable when it's scratched, small, or has a logo.</div></div>
+          </div>
+        </div>
+        <div class="qr-preview-wrap">
+          <div class="qr-stage"><canvas id="qrCanvas" width="600" height="600"></canvas></div>
+          <div class="error hidden" id="contrastWarn" style="margin-top:12px"></div>
+          <div class="dl-row">
+            <button class="btn btn-primary" id="dlPng">Download PNG</button>
+            <button class="btn btn-ghost" id="dlSvg">Download SVG</button>
+            <button class="btn btn-ghost" id="printQr" style="grid-column:1/-1">🖨 Print table cards (4 per page)</button>
+          </div>
+          <p class="hint" style="text-align:center">Always test-scan your code with a phone before printing.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- INSIGHTS -->
+    <section class="panel tab" id="tab-insights">
+      <div class="panel-head"><div><h2>Insights</h2><p>How many times guests opened your menu.</p></div></div>
+      <div class="stats"><div class="stat"><b id="stTotal">0</b><span>All-time menu views</span></div><div class="stat"><b id="stWeek">0</b><span>Last 7 days</span></div><div class="stat"><b id="stToday">0</b><span>Today</span></div></div>
+      <h3 style="font-size:18px">Last 14 days</h3>
+      <div class="bars" id="bars"></div><div class="bar-labels" id="barLabels"></div>
+    </section>
+  </main>
+</div>
+<script src="/js/common.js"></script>
+<script src="/vendor/qr-code-styling.js"></script>
+<script type="module" src="/js/dashboard.js"></script>
+</body></html>
