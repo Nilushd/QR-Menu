@@ -22,7 +22,11 @@ Restaurants register, upload their menu PDFs, design a branded QR code, and prin
     - its **background artwork** (chalkboard, paper, photo), taken from the original embedded image at full resolution so no text is printed over it
     - its subtitle, used as your tagline
 
-  You can review and edit every dish before importing, and dishes you already have are skipped. **Photos are optional:** any dish without a photo from the PDF gets an **＋ Add photo** button (click, or drop an image), and any photo found in the PDF can be replaced or removed. After importing, dishes without photos show a one‑click **Add photo** on the Dishes tab. Works with one or two columns, several pages, and PDFs from Canva, Word, InDesign or a browser. A scanned PDF (a picture with no selectable text) is detected and explained, because it would need OCR.
+  You can review and edit every dish before importing, and dishes you already have are skipped. **Photos are optional:** any dish without a photo from the PDF gets an **＋ Add photo** button (click, or drop an image), and any photo found in the PDF can be replaced or removed. After importing, dishes without photos show a one‑click **Add photo** on the Dishes tab. Works with one or two columns, several pages, and PDFs from Canva, Word, InDesign or a browser.
+- **Scanned menus (OCR, no API key):** when a PDF has no selectable text, for example a photo or scan of a paper menu, the app reads it with [tesseract.js](https://github.com/naptha/tesseract.js) in the owner's browser. The OCR engine and English language data are served from your own server and load only when needed.
+  - Dot leaders and specks are filtered out, common digit mix‑ups in prices are corrected (`45O` → `450`), and text size and boldness are measured from the image so the same name, price and category rules apply.
+  - Photos printed inside the scan are found as colourful areas with no text and matched to the nearest dish. This is best effort, so check them in the review screen.
+  - Lines that were hard to read are marked **Check**. Scans at 300 dpi, straight and well lit give the best results; decorative script fonts are the hardest to read.
 - **Menu page design**, with a live phone preview that updates as you edit:
   - 5 colour styles or a **custom palette** (background, cards, text, descriptions), plus an accent colour
   - 7 font pairings, or **any Google Font** for headings, dish names and body text
@@ -92,7 +96,7 @@ public/login.html    login
 public/register.html registration
 public/dashboard.html + js/dashboard.js   owner dashboard: dishes, PDFs, page design, QR designer
 public/js/qr-render.js styled QR code engine (SVG and PNG)
-public/js/pdf-import.js PDF layout analysis: dishes, prices, photos and colours
+public/js/pdf-import.js PDF layout analysis (and OCR for scans): dishes, prices, photos, colours and fonts
 public/menu.html     guest menu page
 ```
 

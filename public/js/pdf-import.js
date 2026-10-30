@@ -113,6 +113,7 @@ function toLines(items) {
     // Style of the line = style of its longest run of text
     const main = l.items.reduce((a, b) => (b.str.length > a.str.length ? b : a));
     l.size = main.size; l.bold = main.bold; l.font = main.font; l.family = main.family;
+    l.conf = Math.min(...l.items.map(i => i.conf ?? 100));
     l.x0 = Math.min(...l.items.map(i => i.x)); l.x1 = Math.max(...l.items.map(i => i.x + i.w));
     l.top = l.y - l.size; l.bottom = l.y + l.size * .25;
   }
@@ -220,9 +221,10 @@ function parseColumn(lines, ctx, col) {
     const heading = !p && l.text.length <= 40 && words(l.text) <= 6 && /[a-z]/i.test(l.text) &&
       styleKey !== ctx.nameStyle &&
       (l.size >= Math.max(ctx.body * 1.22, ctx.nameSize * 1.15) || (isCaps(l.text) && l.size >= ctx.body * .95 && styleKey !== ctx.nameStyle && (l.bold || ctx.nameIsCaps === false)));
-    const nameLike = styleKey === ctx.nameStyle || (l.bold && l.size >= ctx.body * .95 && !ctx.descBold);
+    const nameLike = styleKey === ctx.nameStyle || (l.bold && l.size >= ctx.body * .95 && !ctx.descBold) ||
+      (ctx.ocr && l.font === ctx.nameFont && Math.abs(l.size - ctx.nameSize) <= ctx.nameSize * .15 && !p && l.text.length <= 50);
     const box = { x0: l.x0, y0: l.top, x1: l.x1, y1: l.bottom };
-    const grow = d => { d.box = d.box ? { x0: Math.min(d.box.x0, box.x0), y0: Math.min(d.box.y0, box.y0), x1: Math.max(d.box.x1, box.x1), y1: Math.max(d.box.y1, box.y1) } : { ...box }; };
+    const grow = d => { d.conf = Math.min(d.conf ?? 100, l.conf ?? 100); d.box = d.box ? { x0: Math.min(d.box.x0, box.x0), y0: Math.min(d.box.y0, box.y0), x1: Math.max(d.box.x1, box.x1), y1: Math.max(d.box.y1, box.y1) } : { ...box }; };
     if (heading) { ctx.fam.head.push(l.family); } else if (!p && !nameLike && l.text.length > 25) ctx.fam.body.push(l.family); else if (nameLike || p) ctx.fam.name.push(l.family);
     if (heading) { ctx.headings.push({ text: l.text.replace(/[:\-–—]+$/, '').trim(), y: l.y, col, x0: l.x0, x1: l.x1 }); cur = null; continue; }
     if (p && p.name) {
@@ -280,8 +282,206 @@ function sampleColours(canvas) {
   return { background: bg, ink, accent: acc, surface, muted: mix(ink, bg, .38), dark };
 }
 
+// ---------- OCR for scanned menus (tesseract.js, runs in the browser, no API key) ----------
+let tessLoading = null;
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  return tessLoading ||= new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = '/vendor/tesseract/tesseract.min.js';
+    s.onload = () => res(window.Tesseract); s.onerror = () => rej(new Error('Could not load the OCR engine.'));
+    document.head.appendChild(s);
+  });
+}
+// OCR often confuses O/0 and l/1 inside numbers
+const fixDigits = w => /\d/.test(w) && /^[\dOoIl|,.$€£₹]+$/.test(w) && w.replace(/[^\d]/g, '').length >= 1 ? w.replace(/[Oo]/g, '0').replace(/[Il|]/g, '1') : w;
+
+async function ocrPage(worker, page, onProgress) {
+  const vp = page.getViewport({ scale: 1 });
+  const scale = Math.min(3, 1700 / vp.width);   // about 200 dpi: body text is crisp and large titles stay readable
+  const pv = page.getViewport({ scale });
+  const canvas = document.createElement('canvas'); canvas.width = pv.width; canvas.height = pv.height;
+  const cx = canvas.getContext('2d', { willReadFrequently: true });
+  cx.fillStyle = '#fff'; cx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: cx, viewport: pv }).promise;
+  const { data } = await worker.recognize(canvas, {}, { blocks: true });
+  const px = cx.getImageData(0, 0, canvas.width, canvas.height).data;
+  const lumAt = (x, y) => { const i = (y * canvas.width + x) * 4; return .299 * px[i] + .587 * px[i + 1] + .114 * px[i + 2]; };
+  // Page background brightness, to tell ink from paper on light and dark menus
+  const samples = []; for (let i = 0; i < 400; i++) samples.push(lumAt(Math.floor(Math.random() * canvas.width), Math.floor(Math.random() * canvas.height)));
+  const bgLum = median(samples), darkPage = bgLum < 110;
+  const inkDensity = b => {
+    let ink = 0, n = 0;
+    for (let y = b.y0; y < b.y1; y += 2) for (let x = b.x0; x < b.x1; x += 2) { const l = lumAt(x, y); n++; if (darkPage ? l > bgLum + 70 : l < bgLum - 70) ink++; }
+    return n ? ink / n : 0;
+  };
+  const lines = [];
+  for (const block of data.blocks || []) for (const para of block.paragraphs || []) for (const line of para.lines || []) {
+    // Drop junk that dotted leaders and specks turn into: near-zero confidence, pure punctuation,
+    // or "words" much shorter than the rest of the line (dots sit low and small)
+    const raw = (line.words || []).filter(w => w.text && w.text.trim());
+    const hMed = median(raw.map(w => w.bbox.y1 - w.bbox.y0));
+    const words = raw.filter(w => w.confidence >= 20 && !/^[.\-_—–=·•:;,'"`~*]+$/.test(w.text) && (w.bbox.y1 - w.bbox.y0) >= hMed * .55);
+    if (!words.length) continue;
+    // Font size from letter heights: a word's box covers capitals/ascenders and/or descenders
+    const h = median(words.map(w => {
+      const t = w.text, asc = /[A-Z0-9bdfhklt$€£₹(){}\[\]|\/@]/.test(t), desc = /[gjpqy$(){}\[\]|@,;]/.test(t);
+      return (w.bbox.y1 - w.bbox.y0) / (asc && desc ? .93 : asc || desc ? .72 : .5);
+    })) / scale;
+    const base = line.baseline && isFinite(line.baseline.y0) ? (line.baseline.y0 + line.baseline.y1) / 2 / scale : line.bbox.y1 / scale;
+    // Ink density relative to height: thicker strokes = bold
+    const dens = words.map(w => inkDensity(w.bbox)).reduce((a, b) => a + b, 0) / words.length;
+    lines.push({ words, size: h, base, dens, conf: Math.min(...words.map(w => w.confidence)) });
+  }
+  onProgress?.();
+  return { lines, canvas, scale, vp };
+}
+
+// Group similar sizes so small OCR jitter doesn't create fake "styles"
+function snapSizes(values) {
+  const sorted = [...values].sort((a, b) => a - b), groups = [];
+  // Split only where neighbouring sizes jump by more than 9%, so jitter within one style stays together
+  for (const v of sorted) { const g = groups.at(-1); if (g && v <= g.at(-1) * 1.09 && v <= g[0] * 1.3) g.push(v); else groups.push([v]); }
+  return v => { const g = groups.find(g => v >= g[0] && v <= g.at(-1)); return g ? Math.round(median(g) * 2) / 2 : v; };
+}
+
+function ocrItems(pagesOcr) {
+  const allLines = pagesOcr.flatMap(p => p.lines);
+  const snap = snapSizes(allLines.map(l => l.size));
+  const densities = allLines.map(l => l.dens).filter(d => d > 0);
+  const boldCut = median(densities) * 1.28;
+  // One item per run of words; a wide gap (with nothing but leaders in it) splits the run,
+  // so the existing column and price logic sees the same shapes as in a text PDF
+  return pagesOcr.map(p => p.lines.flatMap(l => {
+    const size = snap(l.size), bold = l.dens > boldCut, runs = [];
+    for (const w of l.words) {
+      const prev = runs.at(-1), gap = prev ? w.bbox.x0 - prev.x1 : 0;
+      if (prev && gap < (w.bbox.y1 - w.bbox.y0) * 1.6) { prev.words.push(w); prev.x1 = w.bbox.x1; }
+      else runs.push({ words: [w], x0: w.bbox.x0, x1: w.bbox.x1 });
+    }
+    return runs.map(r => ({
+      str: r.words.map(w => fixDigits(w.text)).join(' '), x: r.x0 / p.scale, y: l.base, w: (r.x1 - r.x0) / p.scale,
+      size, font: 'ocr' + (bold ? 'B' : 'R'), bold, family: null, conf: Math.min(...r.words.map(w => w.confidence)),
+    }));
+  }));
+}
+
+// Photos printed inside a scan: colourful / textured areas that contain no text
+let debugPhotos = null;
+function scanPhotos(canvas, scale, vp, items) {
+  const cell = 4, gw = Math.ceil(vp.width / cell), gh = Math.ceil(vp.height / cell);
+  const small = document.createElement('canvas'); small.width = gw * 4; small.height = gh * 4;
+  const sx = small.getContext('2d', { willReadFrequently: true }); sx.drawImage(canvas, 0, 0, small.width, small.height);
+  const d = sx.getImageData(0, 0, small.width, small.height).data;
+  const text = new Uint8Array(gw * gh);
+  for (const it of items) {
+    const x0 = Math.max(0, Math.floor(it.x / cell) - 1), x1 = Math.min(gw - 1, Math.ceil((it.x + it.w) / cell) + 1);
+    const y0 = Math.max(0, Math.floor((it.y - it.size) / cell) - 1), y1 = Math.min(gh - 1, Math.ceil((it.y + it.size * .3) / cell) + 1);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) text[y * gw + x] = 1;
+  }
+  // Cell statistics, then compare each cell with the page's own background colour
+  const stats = new Array(gw * gh);
+  for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+    let r0 = 0, g0 = 0, b0 = 0, sum = 0, sum2 = 0;
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+      const i = ((gy * 4 + y) * small.width + gx * 4 + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2], l = .299 * r + .587 * g + .114 * b;
+      r0 += r; g0 += g; b0 += b; sum += l; sum2 += l * l;
+    }
+    stats[gy * gw + gx] = { r: r0 / 16, g: g0 / 16, b: b0 / 16, std: Math.sqrt(Math.max(0, sum2 / 16 - (sum / 16) ** 2)) };
+  }
+  const free = stats.filter((_, i) => !text[i]);
+  const bg = ['r', 'g', 'b'].map(k => median(free.map(c => c[k])));
+  const bgStd = median(free.map(c => c.std));
+  const photo = new Uint8Array(gw * gh);
+  for (let i = 0; i < gw * gh; i++) {
+    if (text[i]) continue;
+    const c = stats[i], dist = Math.hypot(c.r - bg[0], c.g - bg[1], c.b - bg[2]);
+    if (dist > 45 || c.std > bgStd + 20) photo[i] = 1;
+  }
+  // Printed rules and borders are long and thin; photos never are. Remove them so they can't join photos
+  const thick = (x, y, dx, dy) => { let n = 1; for (const sgn of [-1, 1]) for (let k = 1; k <= 3; k++) { const xx = x + dx * k * sgn, yy = y + dy * k * sgn; if (xx < 0 || yy < 0 || xx >= gw || yy >= gh || !photo[yy * gw + xx]) break; n++; } return n; };
+  const thin = new Uint8Array(gw * gh);
+  for (const horiz of [true, false]) {
+    const A = horiz ? gh : gw, B = horiz ? gw : gh;
+    for (let a = 0; a < A; a++) {
+      let start = -1;
+      for (let b = 0; b <= B; b++) {
+        const on = b < B && photo[horiz ? a * gw + b : b * gw + a];
+        if (on && start < 0) start = b;
+        if (!on && start >= 0) {
+          if (b - start >= 20) for (let k = start; k < b; k++) {
+            const x = horiz ? k : a, y = horiz ? a : k;
+            if (thick(x, y, horiz ? 0 : 1, horiz ? 1 : 0) <= 2) thin[y * gw + x] = 1;
+          }
+          start = -1;
+        }
+      }
+    }
+  }
+  for (let i = 0; i < gw * gh; i++) if (thin[i]) photo[i] = 0;
+  // Close small gaps (flat areas inside a photo), then find connected regions
+  const grown = new Uint8Array(gw * gh);
+  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) if (photo[y * gw + x])
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const yy = y + dy, xx = x + dx; if (yy >= 0 && yy < gh && xx >= 0 && xx < gw && !text[yy * gw + xx]) grown[yy * gw + xx] = 1; }
+  const seen = new Uint8Array(gw * gh), boxes = [], comps = [];
+  for (let i = 0; i < gw * gh; i++) {
+    if (!grown[i] || seen[i]) continue;
+    let x0 = gw, y0 = gh, x1 = 0, y1 = 0, n = 0, hits = 0; const stack = [i]; seen[i] = 1;
+    while (stack.length) {
+      const k = stack.pop(), x = k % gw, y = (k - x) / gw; n++; if (photo[k]) hits++;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      for (const nk of [k - 1, k + 1, k - gw, k + gw]) if (nk >= 0 && nk < gw * gh && !seen[nk] && grown[nk] && Math.abs((nk % gw) - x) <= 1) { seen[nk] = 1; stack.push(nk); }
+    }
+    comps.push([x0, y0, x1, y1]);
+  }
+  // A white plate can break one photo into pieces: merge pieces that overlap or touch
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let i = 0; i < comps.length && !changed; i++) for (let j = i + 1; j < comps.length && !changed; j++) {
+      const a = comps[i], b = comps[j];
+      if (a[0] <= b[2] + 1 && b[0] <= a[2] + 1 && a[1] <= b[3] + 1 && b[1] <= a[3] + 1) {
+        comps[i] = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])]; comps.splice(j, 1); changed = true;
+      }
+    }
+  }
+  for (const [x0, y0, x1, y1] of comps) {
+    // Neighbouring photos joined by a printed rule or a narrow gap: cut at nearly empty bands
+    const cut = (ax, ay, bx, by, depth) => {
+      if (depth > 6) return [[ax, ay, bx, by]];
+      for (const horiz of [false, true]) {
+        const len = horiz ? bx - ax + 1 : by - ay + 1, n = horiz ? by - ay + 1 : bx - ax + 1;
+        const cov = [];
+        for (let a = 0; a < n; a++) { let c = 0; for (let b2 = 0; b2 < len; b2++) { const xx = horiz ? ax + b2 : ax + a, yy = horiz ? ay + a : ay + b2; if (photo[yy * gw + xx]) c++; } cov.push(c / len); }
+        // A real gap between photos: straight photo edges on both sides, or an elongated region
+        // that splits into two photo-shaped pieces (a white plate inside one photo is neither)
+        const W = bx - ax + 1, H = by - ay + 1, along = horiz ? H : W, across = horiz ? W : H;
+        for (let a = 2; a < n - 2; a++) {
+          if (cov[a] >= .12) continue;
+          let end = a; while (end + 1 < n && cov[end + 1] < .12) end++;
+          const s0 = a; a = end;
+          if (end - s0 + 1 < 2 || s0 < 9 || n - end - 1 < 9) continue;
+          const straight = cov[s0 - 1] >= .5 && cov[end + 1] >= .5;
+          const shape = l => Math.max(l, across) / Math.min(l, across) <= 1.8;
+          const twoPhotos = along / across > 1.5 && shape(s0) && shape(n - end - 1);
+          if (!straight && !twoPhotos) continue;
+          return horiz ? [...cut(ax, ay, bx, ay + s0 - 1, depth + 1), ...cut(ax, ay + end + 1, bx, by, depth + 1)]
+                       : [...cut(ax, ay, ax + s0 - 1, by, depth + 1), ...cut(ax + end + 1, ay, bx, by, depth + 1)];
+        }
+      }
+      return [[ax, ay, bx, by]];
+    };
+    for (const [cx0, cy0, cx1, cy1] of cut(x0, y0, x1, y1, 0)) {
+      let h2 = 0; for (let y = cy0; y <= cy1; y++) for (let x = cx0; x <= cx1; x++) if (photo[y * gw + x]) h2++;
+      const box = { x0: cx0 * cell, y0: cy0 * cell, x1: (cx1 + 1) * cell, y1: (cy1 + 1) * cell };
+      const w = box.x1 - box.x0, h = box.y1 - box.y0, area = w * h / (vp.width * vp.height);
+      if (w >= 36 && h >= 36 && area < .45 && h2 / ((cx1 - cx0 + 1) * (cy1 - cy0 + 1)) > .3 && Math.max(w / h, h / w) < 3.5) boxes.push({ ...box, area, id: null });
+    }
+  }
+  if (debugPhotos) debugPhotos.push(boxes.map(b => [b.x0, b.y0, b.x1, b.y1].map(Math.round)));
+  return boxes;
+}
+
 /** Returns { dishes: [{name, price, description, category, photo (Blob|null)}], colours, hasText, pages } */
-export async function extractMenu(url, { onProgress } = {}) {
+export async function extractMenu(url, { onProgress, onStatus, debug } = {}) {
   const pdf = await pdfjsLib.getDocument(url).promise;
   const pagesData = [];
   for (let n = 1; n <= pdf.numPages; n++) {
@@ -289,8 +489,26 @@ export async function extractMenu(url, { onProgress } = {}) {
     pagesData.push({ page, vp, items: await pageLines(page, vp) });
     onProgress?.(n / pdf.numPages * .4);
   }
-  const all = pagesData.flatMap(p => p.items);
-  if (all.length < 5) return { dishes: [], colours: null, hasText: false, pages: pdf.numPages };
+  let all = pagesData.flatMap(p => p.items);
+  // No selectable text: the PDF is a scan or a picture, so read it with OCR
+  let ocr = false;
+  if (all.length < 5) {
+    ocr = true;
+    onStatus?.('This PDF is a scanned image — reading the text with OCR. This can take a minute…');
+    const T = await loadTesseract();
+    let done = 0;
+    const worker = await T.createWorker('eng', 1, {
+      workerPath: '/vendor/tesseract/worker.min.js', corePath: '/vendor/tesseract-core', langPath: '/vendor/tessdata',
+      logger: m => { if (m.status === 'recognizing text') onProgress?.(.4 + (done + m.progress) / pagesData.length * .45); },
+    });
+    try {
+      const pagesOcr = [];
+      for (const pd of pagesData) { pagesOcr.push(await ocrPage(worker, pd.page)); done++; }
+      ocrItems(pagesOcr).forEach((items, i) => { pagesData[i].items = items; pagesData[i].ocr = pagesOcr[i]; });
+    } finally { await worker.terminate(); }
+    all = pagesData.flatMap(p => p.items);
+    if (all.length < 5) return { dishes: [], colours: null, hasText: false, ocr, pages: pdf.numPages };
+  }
 
   // Body text size = most common size by character count
   const bySize = new Map();
@@ -313,9 +531,11 @@ export async function extractMenu(url, { onProgress } = {}) {
       if (prev.bold || prev.size > body * 1.02 || j === i - 1 && i < 2) { const k = prev.font + '|' + Math.round(prev.size); styleCount.set(k, (styleCount.get(k) || 0) + 1); break; }
     }
   });
+  if (debug) debugPhotos = debug.photos = [];
+  if (debug) debug.lines = colLines.map(cols => cols.map(lines => lines.map(l => `${l.font}|${Math.round(l.size)}${l.bold ? 'B' : ''} ${l.text}`)));
   const nameStyle = [...styleCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
   const nameLines = colLines.flat(2).filter(l => l.font + '|' + Math.round(l.size) === nameStyle);
-  const ctx = { fam: { head: [], name: [], body: [] }, body, nameStyle, nameSize: nameStyle ? +nameStyle.split('|')[1] : body, lastCategory: '', descBold: descBold.filter(Boolean).length > descBold.length / 2, nameIsCaps: nameLines.length ? nameLines.filter(l => isCaps(l.text)).length > nameLines.length / 2 : null };
+  const ctx = { ocr, nameFont: nameStyle ? nameStyle.split('|')[0] : null, fam: { head: [], name: [], body: [] }, body, nameStyle, nameSize: nameStyle ? +nameStyle.split('|')[1] : body, lastCategory: '', descBold: descBold.filter(Boolean).length > descBold.length / 2, nameIsCaps: nameLines.length ? nameLines.filter(l => isCaps(l.text)).length > nameLines.length / 2 : null };
 
   const dishes = [];
   for (let pi = 0; pi < pagesData.length; pi++) {
@@ -335,10 +555,10 @@ export async function extractMenu(url, { onProgress } = {}) {
     const lastH = ctx.headings.sort((a, b) => a.col - b.col || a.y - b.y).at(-1);
     if (lastH) ctx.lastCategory = lastH.text;
     // Photos: render the page once and crop each image's area, then give it to the nearest dish
-    const allImgs = await pageImages(page, vp);
-    const imgs = allImgs.filter(b => b.area < .45);
+    const allImgs = pagesData[pi].ocr ? [] : await pageImages(page, vp);
+    const imgs = pagesData[pi].ocr ? scanPhotos(pagesData[pi].ocr.canvas, pagesData[pi].ocr.scale, vp, pagesData[pi].items) : allImgs.filter(b => b.area < .45);
     // Background artwork: the biggest image covering much of the first page, taken at original resolution
-    if (pi === 0) {
+    if (pi === 0 && !ocr) {
       const bgImg = allImgs.filter(b => b.area >= .45 && b.id).sort((a, b) => b.area - a.area)[0];
       if (bgImg) ctx.background = await originalImage(page, bgImg.id);
     }
@@ -346,10 +566,33 @@ export async function extractMenu(url, { onProgress } = {}) {
       const scale = 2.5, canvas = document.createElement('canvas'), pv = page.getViewport({ scale });
       canvas.width = pv.width; canvas.height = pv.height;
       await page.render({ canvasContext: canvas.getContext('2d'), viewport: pv }).promise;
+      // Scans: a photo can be detected as several pieces. Give each piece to its nearest dish and
+      // join the pieces each dish received, so the crop is the whole photo
+      if (pagesData[pi].ocr) {
+        const byDish = new Map();
+        imgs.forEach(im => {
+          let best = null;
+          // Prefer the dish whose text runs beside the photo (same rows) or under/over it (same columns)
+          const cx = (im.x0 + im.x1) / 2, cy = (im.y0 + im.y1) / 2;
+          pageDishes.forEach((d, di) => {
+            const b = d.box || d.nameBox, aligned = (cy >= b.y0 - 4 && cy <= b.y1 + 4) || (cx >= b.x0 && cx <= b.x1);
+            const sc = Math.min(rectDist(im, b), rectDist(im, d.nameBox)) + rectDist(im, d.nameBox) * .25 + (aligned ? 0 : 40);
+            if (!best || sc < best.sc) best = { di, sc };
+          });
+          if (best && best.sc <= Math.max(90, vp.width * .18)) (byDish.get(best.di) || byDish.set(best.di, []).get(best.di)).push(im);
+        });
+        imgs.length = 0;
+        for (const [di, pieces] of byDish) {
+          pieces.sort((a, b) => (b.x1 - b.x0) * (b.y1 - b.y0) - (a.x1 - a.x0) * (a.y1 - a.y0));
+          let u = { ...pieces[0] };
+          for (const q of pieces.slice(1)) if (rectDist(u, q) <= 16) u = { x0: Math.min(u.x0, q.x0), y0: Math.min(u.y0, q.y0), x1: Math.max(u.x1, q.x1), y1: Math.max(u.y1, q.y1) };
+          u.forDish = di; imgs.push(u);
+        }
+      }
       const pairs = [];
       imgs.forEach((im, ii) => pageDishes.forEach((d, di) => {
         const dist = rectDist(im, d.box || d.nameBox), nameDist = rectDist(im, d.nameBox);
-        pairs.push({ ii, di, score: Math.min(dist, nameDist) + nameDist * .25 });
+        pairs.push({ ii, di, score: im.forDish === undefined ? Math.min(dist, nameDist) + nameDist * .25 : im.forDish === di ? 0 : Infinity });
       }));
       pairs.sort((a, b) => a.score - b.score);
       const usedI = new Set(), usedD = new Set();
@@ -399,9 +642,9 @@ export async function extractMenu(url, { onProgress } = {}) {
   const pick = arr => { const c = new Map(); arr.filter(Boolean).forEach(f => c.set(f, (c.get(f) || 0) + 1)); return [...c.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null; };
   const fonts = { head: pick(ctx.fam.head) || pick(ctx.fam.name), name: pick(ctx.fam.name), body: pick(ctx.fam.body) || pick(ctx.fam.name), nameCaps: ctx.nameIsCaps === true };
   const clean = dishes
-    .filter(d => d.name && d.name.length <= 80 && /[a-z]/i.test(d.name) && (d.price || d.description || d.photo))
-    .map(d => ({ name: tidy(d.name), price: d.price, description: d.description.slice(0, 400), category: tidy(d.category).slice(0, 40), photo: d.photo || null }));
+    .filter(d => d.name && d.name.length <= 80 && /[a-z]/i.test(d.name) && (d.price || d.description))
+    .map(d => ({ check: ocr && (d.conf ?? 100) < 65, name: tidy(ocr ? d.name.replace(/^(?:\S{0,2}[^\w\s&]\S{0,1}\s+|[^A-Za-z\s]+\s+)+/, '') : d.name), price: d.price, description: d.description.slice(0, 400), category: tidy(d.category).slice(0, 40), photo: d.photo || null }));
   // A "subtitle" that is really the first category heading is not a tagline
   if (clean.some(d => d.category.toLowerCase() === subtitle.toLowerCase())) subtitle = '';
-  return { dishes: clean, title: title ? tidy(title.text) : '', subtitle, colours: ctx.colours, fonts, background: ctx.background || null, hasText: true, pages: pdf.numPages };
+  return { ocr, dishes: clean, title: title ? tidy(title.text) : '', subtitle, colours: ctx.colours, fonts, background: ctx.background || null, hasText: true, pages: pdf.numPages };
 }

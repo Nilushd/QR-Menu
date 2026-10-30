@@ -267,16 +267,19 @@ async function openImport(menu, afterUpload) {
   impDlg.showModal();
   let res;
   try {
-    res = await extractMenu(menu.url, { onProgress: f => { const b = $('#impBody .progress div'); if (b) b.style.width = Math.round(f * 100) + '%'; } });
+    res = await extractMenu(menu.url, {
+      onProgress: f => { const b = $('#impBody .progress div'); if (b) b.style.width = Math.round(f * 100) + '%'; },
+      onStatus: msg => { $('#impSub').textContent = msg; },
+    });
   } catch (x) {
     $('#impSub').textContent = ''; $('#impBody').innerHTML = `<div class="imp-empty"><div class="big">⚠️</div><h3>We couldn't read this PDF</h3><p>${esc(x.message)}</p></div>`; return;
   }
   if (!res.hasText || !res.dishes.length) {
-    if (afterUpload) { impDlg.close(); return; }
+    if (afterUpload && !res.ocr) { impDlg.close(); return; }
     $('#impSub').textContent = '';
     $('#impBody').innerHTML = `<div class="imp-empty"><div class="big">${res.hasText ? '🤔' : '🖼️'}</div>
-      <h3>${res.hasText ? 'No dishes with prices found' : 'This PDF is a scanned image'}</h3>
-      <p>${res.hasText ? 'We couldn\'t match dish names to prices in this layout.' : 'It has no selectable text (it was probably scanned or exported as a picture), so names and prices can\'t be read.'}
+      <h3>${res.ocr ? 'We couldn\'t read dishes from this scan' : res.hasText ? 'No dishes with prices found' : 'This PDF is a scanned image'}</h3>
+      <p>${res.ocr ? 'The text in this scanned image couldn\'t be read clearly. A sharper scan (300 dpi, straight, good light) usually works much better.' : res.hasText ? 'We couldn\'t match dish names to prices in this layout.' : 'It has no selectable text, so names and prices can\'t be read.'}
       Your PDF still works for guests — you can also add dishes by hand in <a href="#dishes" data-close>Dishes &amp; photos</a>.</p></div>`;
     return;
   }
@@ -293,7 +296,7 @@ async function openImport(menu, afterUpload) {
     l.href = `https://fonts.googleapis.com/css?family=${okNames.map(n => encodeURIComponent(n) + ':400,600,700').join('|')}&display=swap`;
   }
   const photos = found.filter(d => d.photo).length, dupes = found.filter(d => !d.use).length;
-  $('#impSub').textContent = `Found ${found.length} dishes${photos ? ` and ${photos} photos` : ''} in ${new Set(found.map(d => d.category)).size || 1} categories. Check and edit before importing.` +
+  $('#impSub').textContent = (res.ocr ? 'Read from a scanned image with OCR. ' : '') + `Found ${found.length} dishes${photos ? ` and ${photos} photos` : ''} in ${new Set(found.map(d => d.category)).size || 1} categories. Check and edit before importing.` +
     (dupes ? ` ${dupes} already in your menu ${dupes > 1 ? 'are' : 'is'} unticked.` : '');
   $('#impColoursWrap').classList.add('hidden');
   renderFound();
@@ -306,17 +309,18 @@ function renderFound() {
   found.forEach((d, i) => (groups[d.category || 'Menu'] ||= []).push(i));
   const missing = found.filter(d => d.use && !d.preview).length;
   $('#impBody').innerHTML = styleCard() +
+    (found.some(d => d.check) ? `<p class="imp-note imp-warn">⚠ This menu was read from a scanned image. Please double-check names and prices — rows marked <b>Check</b> were hard to read.</p>` : '') +
     (missing ? `<p class="imp-note">${missing === found.length ? 'No dish photos were found in this PDF.' : `${missing} dish${missing > 1 ? 'es have' : ' has'} no photo.`} Photos are optional — click <b>＋ Add photo</b> on any dish to add one now, or later from Dishes &amp; photos.</p>` : '') +
     `<label class="toggle imp-all"><input type="checkbox" id="impAll" ${found.every(d => d.use) ? 'checked' : ''}> Select all</label>` +
     Object.entries(groups).map(([cat, idx]) => `<h3 class="cat-head">${esc(cat)} <span>${idx.length}</span></h3>` + idx.map(i => {
       const d = found[i];
-      return `<div class="imp-row${d.use ? '' : ' off'}" data-i="${i}">
+      return `<div class="imp-row${d.use ? '' : ' off'}${d.check ? ' check' : ''}" data-i="${i}">
         <input type="checkbox" data-f="use" ${d.use ? 'checked' : ''} aria-label="Import this dish">
         ${d.preview
           ? `<div class="imp-thumb" data-pickphoto title="Click or drop an image to replace this photo" style="background-image:url('${d.preview}')"><button type="button" class="imp-x" data-nophoto title="Remove this photo">✕</button></div>`
           : `<button type="button" class="imp-thumb imp-add" data-pickphoto title="Add a photo (optional)">＋<span>Add photo</span></button>`}
         <div class="imp-fields">
-          <div class="imp-line"><input type="text" data-f="name" value="${esc(d.name)}" maxlength="80" aria-label="Name"><input type="text" data-f="price" value="${esc(d.price)}" maxlength="24" class="imp-price" aria-label="Price"></div>
+          <div class="imp-line">${d.check ? '<span class="imp-check" title="Hard to read in the scan — please check">Check</span>' : ''}<input type="text" data-f="name" value="${esc(d.name)}" maxlength="80" aria-label="Name"><input type="text" data-f="price" value="${esc(d.price)}" maxlength="24" class="imp-price" aria-label="Price"></div>
           <div class="imp-line"><input type="text" data-f="category" value="${esc(d.category)}" maxlength="40" class="imp-cat" aria-label="Category" placeholder="Category"><input type="text" data-f="description" value="${esc(d.description)}" maxlength="400" aria-label="Description" placeholder="Description"></div>
         </div></div>`;
     }).join('')).join('');

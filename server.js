@@ -443,6 +443,11 @@ app.post('/api/public/:slug/view', (req, res) => {
 const pub = path.join(__dirname, 'public');
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', index: false }));
 app.use('/vendor/qrcode.js', express.static(require.resolve('qrcode-generator/qrcode.js')));
+// OCR for scanned menus (tesseract.js) — served locally, loaded by the dashboard only when needed
+const modDir = name => path.dirname(require.resolve(name + '/package.json'));
+app.use('/vendor/tesseract', express.static(path.join(modDir('tesseract.js'), 'dist'), { maxAge: '30d' }));
+app.use('/vendor/tesseract-core', express.static(modDir('tesseract.js-core'), { maxAge: '30d' }));
+app.use('/vendor/tessdata', express.static(path.join(modDir('@tesseract.js-data/eng'), '4.0.0_best_int'), { maxAge: '30d' }));
 app.use('/vendor/pdfjs', express.static(path.join(path.dirname(require.resolve('pdfjs-dist/package.json')), 'build'), { maxAge: '7d' }));
 app.use(express.static(pub, { extensions: ['html'] }));
 app.get('/m/:slug', (req, res) => res.sendFile(path.join(pub, 'menu.html')));
