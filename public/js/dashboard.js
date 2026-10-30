@@ -13,8 +13,11 @@ const THEME_META = {
   rustic: { label: 'Rustic', bg: '#efe3cc', fg: '#4a3423', font: 'Georgia, serif' },
   midnight: { label: 'Midnight', bg: '#111216', fg: '#f3efe8', font: 'Georgia, serif' },
   fresh: { label: 'Fresh', bg: '#eef8f3', fg: '#16352a', font: 'Inter, sans-serif' },
+  custom: { label: 'Custom', font: 'Georgia, serif' },
 };
-const ACCENTS = ['#c8553d', '#d9480f', '#e8590c', '#c2255c', '#862e9c', '#3b5bdb', '#0b7285', '#2b8a3e', '#5c940d', '#b08900', '#1f1b16'];
+const GOOGLE_FONTS = ['Playfair Display', 'Cormorant Garamond', 'Lora', 'Libre Baskerville', 'DM Serif Display', 'Fraunces', 'Cinzel', 'Great Vibes', 'Dancing Script', 'Pacifico', 'Oswald', 'Bebas Neue', 'Montserrat', 'Raleway', 'Lato', 'Poppins', 'Inter', 'Josefin Sans', 'Nunito', 'Work Sans', 'Karla', 'Source Serif 4', 'Abril Fatface', 'Amatic SC', 'Caveat'];
+const BG_MODES = [['none', 'Plain colour'], ['paper', 'Paper texture'], ['photo', 'Background image']];
+const ACCENTS = ['#1f6f5c', '#c8553d', '#d9480f', '#e8590c', '#c2255c', '#862e9c', '#3b5bdb', '#0b7285', '#2b8a3e', '#5c940d', '#b08900', '#1f1b16'];
 const FONTS = {
   auto: ['Style default', 'Georgia, serif'], classic: ['Classic', '"Playfair Display", serif'], elegant: ['Elegant', '"Cormorant Garamond", serif'],
   modern: ['Modern', 'Inter, sans-serif'], friendly: ['Friendly', 'Poppins, sans-serif'], bold: ['Bold', 'Oswald, sans-serif'], script: ['Script', '"Dancing Script", cursive'],
@@ -23,7 +26,8 @@ const PAGE_TILES = {
   hero: [['full', 'Full photo', '<rect x="2" y="2" width="36" height="20" rx="2" fill="var(--a)"/><circle cx="20" cy="17" r="4" fill="#fff"/><rect x="6" y="26" width="28" height="3" rx="1.5" fill="#ccc"/><rect x="6" y="32" width="20" height="3" rx="1.5" fill="#ddd"/>'],
     ['compact', 'Compact', '<rect x="2" y="2" width="36" height="11" rx="2" fill="var(--a)"/><circle cx="9" cy="13" r="4" fill="#fff" stroke="#ddd"/><rect x="15" y="16" width="18" height="3" rx="1.5" fill="#999"/><rect x="6" y="24" width="28" height="3" rx="1.5" fill="#ccc"/><rect x="6" y="30" width="20" height="3" rx="1.5" fill="#ddd"/>'],
     ['minimal', 'Minimal', '<circle cx="20" cy="10" r="5" fill="var(--a)"/><rect x="10" y="18" width="20" height="3" rx="1.5" fill="#999"/><rect x="6" y="26" width="28" height="3" rx="1.5" fill="#ccc"/><rect x="6" y="32" width="20" height="3" rx="1.5" fill="#ddd"/>']],
-  layout: [['grid', 'Grid', '<rect x="3" y="3" width="16" height="14" rx="2" fill="var(--a)" opacity=".7"/><rect x="21" y="3" width="16" height="14" rx="2" fill="var(--a)" opacity=".7"/><rect x="3" y="20" width="12" height="2.5" rx="1" fill="#999"/><rect x="21" y="20" width="12" height="2.5" rx="1" fill="#999"/><rect x="3" y="26" width="16" height="10" rx="2" fill="var(--a)" opacity=".4"/><rect x="21" y="26" width="16" height="10" rx="2" fill="var(--a)" opacity=".4"/>'],
+  layout: [['classic', 'Classic menu', '<rect x="3" y="4" width="13" height="3" rx="1" fill="#777"/><path d="M17 6.5h12" stroke="#bbb" stroke-dasharray="1 2"/><rect x="30" y="4" width="7" height="3" rx="1" fill="var(--a)"/><rect x="3" y="9" width="20" height="2" rx="1" fill="#ccc"/><rect x="3" y="16" width="16" height="3" rx="1" fill="#777"/><path d="M20 18.5h9" stroke="#bbb" stroke-dasharray="1 2"/><rect x="30" y="16" width="7" height="3" rx="1" fill="var(--a)"/><rect x="3" y="21" width="22" height="2" rx="1" fill="#ccc"/><rect x="3" y="28" width="12" height="3" rx="1" fill="#777"/><path d="M16 30.5h13" stroke="#bbb" stroke-dasharray="1 2"/><rect x="30" y="28" width="7" height="3" rx="1" fill="var(--a)"/><rect x="3" y="33" width="18" height="2" rx="1" fill="#ccc"/>'],
+    ['grid', 'Grid', '<rect x="3" y="3" width="16" height="14" rx="2" fill="var(--a)" opacity=".7"/><rect x="21" y="3" width="16" height="14" rx="2" fill="var(--a)" opacity=".7"/><rect x="3" y="20" width="12" height="2.5" rx="1" fill="#999"/><rect x="21" y="20" width="12" height="2.5" rx="1" fill="#999"/><rect x="3" y="26" width="16" height="10" rx="2" fill="var(--a)" opacity=".4"/><rect x="21" y="26" width="16" height="10" rx="2" fill="var(--a)" opacity=".4"/>'],
     ['list', 'List', '<rect x="3" y="4" width="20" height="3" rx="1.5" fill="#999"/><rect x="3" y="9" width="14" height="2" rx="1" fill="#ccc"/><rect x="28" y="3" width="9" height="9" rx="2" fill="var(--a)" opacity=".7"/><rect x="3" y="17" width="20" height="3" rx="1.5" fill="#999"/><rect x="3" y="22" width="14" height="2" rx="1" fill="#ccc"/><rect x="28" y="16" width="9" height="9" rx="2" fill="var(--a)" opacity=".7"/><rect x="3" y="30" width="20" height="3" rx="1.5" fill="#999"/><rect x="28" y="29" width="9" height="9" rx="2" fill="var(--a)" opacity=".7"/>'],
     ['magazine', 'Magazine', '<rect x="3" y="3" width="34" height="18" rx="2" fill="var(--a)" opacity=".7"/><rect x="3" y="24" width="22" height="3" rx="1.5" fill="#999"/><rect x="3" y="30" width="30" height="2" rx="1" fill="#ccc"/><rect x="3" y="35" width="26" height="2" rx="1" fill="#ccc"/>']],
 };
@@ -243,7 +247,7 @@ drop.addEventListener('drop', e => uploadPdf(e.dataTransfer.files[0]));
 
 // ---------- Create a photo menu from a PDF (layout analysis in the browser, no AI service) ----------
 const impDlg = $('#importDlg');
-let found = [], impColours = null;
+let found = [], impColours = null, impStyle = null;
 impDlg.addEventListener('click', e => { if (e.target.closest('[data-close]') || e.target === impDlg) impDlg.close(); });
 async function openImport(menu, afterUpload) {
   if (!menu) return;
@@ -270,19 +274,29 @@ async function openImport(menu, afterUpload) {
   }
   found = res.dishes.map(d => ({ ...d, use: !R.dishes.some(x => x.name.toLowerCase() === d.name.toLowerCase()), preview: d.photo ? URL.createObjectURL(d.photo) : null }));
   impColours = res.colours;
+  impStyle = { subtitle: res.subtitle, colours: res.colours, fonts: res.fonts || {}, background: res.background, bgUrl: res.background ? URL.createObjectURL(res.background) : null };
+  // Only keep font names Google Fonts actually serves, so the menu never falls back unexpectedly
+  const names = [...new Set([impStyle.fonts.head, impStyle.fonts.name, impStyle.fonts.body].filter(Boolean))];
+  const ok = await Promise.all(names.map(n => fetch(`https://fonts.googleapis.com/css?family=${encodeURIComponent(n)}`).then(r => r.ok, () => false)));
+  for (const k of ['head', 'name', 'body']) if (impStyle.fonts[k] && !ok[names.indexOf(impStyle.fonts[k])]) impStyle.fonts[k] = null;
+  const okNames = names.filter((n, i) => ok[i]);
+  if (okNames.length) {
+    let l = $('#impFonts'); if (!l) { l = document.createElement('link'); l.id = 'impFonts'; l.rel = 'stylesheet'; document.head.appendChild(l); }
+    l.href = `https://fonts.googleapis.com/css?family=${okNames.map(n => encodeURIComponent(n) + ':400,600,700').join('|')}&display=swap`;
+  }
   const photos = found.filter(d => d.photo).length, dupes = found.filter(d => !d.use).length;
   $('#impSub').textContent = `Found ${found.length} dishes${photos ? ` and ${photos} photos` : ''} in ${new Set(found.map(d => d.category)).size || 1} categories. Check and edit before importing.` +
     (dupes ? ` ${dupes} already in your menu ${dupes > 1 ? 'are' : 'is'} unticked.` : '');
-  const c = impColours;
-  $('#impColoursWrap').classList.toggle('hidden', !c?.accent);
-  if (c?.accent) $('#impColoursLabel').innerHTML = `Match the PDF's look: <span class="sw-dot" style="background:${c.accent}"></span> accent${c.dark ? ' · dark style' : ''}`;
+  $('#impColoursWrap').classList.add('hidden');
   renderFound();
   $('#impFoot').classList.remove('hidden');
 }
 function renderFound() {
+  const keep = ['impUseStyle', 'impUseBg', 'impUseLayout'].map(id => [id, document.getElementById(id)?.checked]);
+  setTimeout(() => keep.forEach(([id, v]) => { const el = document.getElementById(id); if (el && v !== undefined) el.checked = v; }));
   const groups = {};
   found.forEach((d, i) => (groups[d.category || 'Menu'] ||= []).push(i));
-  $('#impBody').innerHTML = `<label class="toggle imp-all"><input type="checkbox" id="impAll" ${found.every(d => d.use) ? 'checked' : ''}> Select all</label>` +
+  $('#impBody').innerHTML = styleCard() + `<label class="toggle imp-all"><input type="checkbox" id="impAll" ${found.every(d => d.use) ? 'checked' : ''}> Select all</label>` +
     Object.entries(groups).map(([cat, idx]) => `<h3 class="cat-head">${esc(cat)} <span>${idx.length}</span></h3>` + idx.map(i => {
       const d = found[i];
       return `<div class="imp-row${d.use ? '' : ' off'}" data-i="${i}">
@@ -294,6 +308,26 @@ function renderFound() {
         </div></div>`;
     }).join('')).join('');
   updateImpCount();
+}
+function styleCard() {
+  const st = impStyle; if (!st?.colours) return '';
+  const c = st.colours, f = st.fonts;
+  const sw = [['Background', c.background], ['Text', c.ink], ['Descriptions', c.muted], ['Accent', c.accent]].filter(([, v]) => v);
+  const font = (n, label) => n ? `<div class="imp-font"><span style="font-family:'${n}',serif">${esc(n)}</span><small>${label}</small></div>` : '';
+  return `<div class="imp-style">
+    <div class="imp-style-preview" style="background:${c.background}${st.bgUrl ? ` url('${st.bgUrl}') center/cover` : ''};color:${c.ink}">
+      <div style="background:linear-gradient(${c.background}55,${c.background}aa);padding:16px 18px;height:100%">
+        <div style="font:600 24px '${f.head || 'Georgia'}',serif;color:${c.ink}">${esc(R.name)}</div>
+        <div style="display:flex;gap:6px;align-items:baseline;margin-top:8px;font:600 14px '${f.name || f.body || 'Georgia'}',serif;${f.nameCaps ? 'text-transform:uppercase;' : ''}">${esc(found[0]?.name || 'Dish')}<span style="flex:1;border-bottom:2px dotted ${c.muted}"></span><span style="color:${c.accent || c.ink}">${esc(found[0]?.price || '')}</span></div>
+        <div style="font:italic 12px '${f.body || 'Georgia'}',serif;color:${c.muted}">${esc((found[0]?.description || '').slice(0, 60))}</div>
+      </div></div>
+    <div class="imp-style-info"><h3>Style from your PDF</h3>
+      <div class="imp-swatches">${sw.map(([l, v]) => `<span title="${l} ${v}"><i style="background:${v}"></i>${l}</span>`).join('')}</div>
+      <div class="imp-fonts">${font(f.head, 'Headings')}${f.name !== f.head ? font(f.name, 'Dish names') : ''}${f.body !== f.name ? font(f.body, 'Text') : ''}</div>
+      <label class="toggle"><input type="checkbox" id="impUseStyle" checked> Use these colours and fonts</label>
+      ${st.background ? '<label class="toggle"><input type="checkbox" id="impUseBg" checked> Use the PDF\'s background image</label>' : ''}
+      <label class="toggle"><input type="checkbox" id="impUseLayout" checked> Show dishes like the printed menu</label>
+    </div></div>`;
 }
 function updateImpCount() { const n = found.filter(d => d.use).length; $('#impGo').textContent = `Import ${n} dish${n === 1 ? '' : 'es'}`; $('#impGo').disabled = !n; }
 $('#impBody').addEventListener('input', e => {
@@ -319,13 +353,30 @@ $('#impGo').onclick = async () => {
     if (d.photo) fd.append('file', new File([d.photo], 'photo.jpg', { type: 'image/jpeg' }));
     try { R = (await api('/api/dishes', { method: 'POST', body: fd })).restaurant; done++; } catch { failed++; }
   }
-  if ($('#impColours').checked && impColours?.accent && !$('#impColoursWrap').classList.contains('hidden')) {
+  // Apply the PDF's look to the menu page
+  const useStyle = $('#impUseStyle')?.checked, useBg = $('#impUseBg')?.checked, useLayout = $('#impUseLayout')?.checked;
+  if (impStyle?.colours && (useStyle || useBg || useLayout)) {
     try {
-      const body = { accent: impColours.accent };
-      if (impColours.dark) body.theme = 'midnight';
-      else if (R.theme === 'midnight') body.theme = 'elegant';
-      R = (await api('/api/restaurant', { method: 'PUT', body })).restaurant; fillDesign();
-    } catch {}
+      btn.textContent = 'Applying your style…';
+      const c = impStyle.colours, f = impStyle.fonts, page = {};
+      const body = { page };
+      if (useStyle) {
+        body.theme = 'custom';
+        if (c.accent) body.accent = c.accent;
+        page.colors = { bg: c.background, surface: c.surface, ink: c.ink, muted: c.muted };
+        page.headFont = f.head || ''; page.nameFont = f.name || ''; page.bodyFont = f.body || '';
+        page.nameCase = f.nameCaps ? 'upper' : 'none';
+        page.bgMode = c.dark ? 'none' : 'paper';
+      }
+      if (useBg && impStyle.background) {
+        const fd = new FormData(); fd.append('file', new File([impStyle.background], 'background.jpg', { type: 'image/jpeg' }));
+        R.bg_image = (await api('/api/restaurant/bg-image', { method: 'POST', body: fd })).url;
+        page.bgMode = 'photo';
+      }
+      if (useLayout) page.layout = 'classic';
+      if (useStyle && !R.tagline && impStyle.subtitle) body.tagline = impStyle.subtitle;
+      R = (await api('/api/restaurant', { method: 'PUT', body })).restaurant; fillDesign(); previewLoaded = false;
+    } catch (x) { toast(x.message); }
   }
   impDlg.close(); renderDishes();
   toast(failed ? `Imported ${done} dishes (${failed} failed)` : `Imported ${done} dishes 🎉`);
@@ -335,29 +386,35 @@ $('#impGo').onclick = async () => {
 // ---------- Menu page design ----------
 let draft; // unsaved copy of the restaurant settings, drives the live preview
 function fillDesign() {
-  draft = { theme: R.theme, accent: R.accent, page: { ...R.page } };
+  draft = { theme: R.theme, accent: R.accent, page: { ...R.page, colors: { ...R.page.colors } } };
   const f = $('#profileForm');
   ['name', 'tagline', 'address', 'phone', 'hours', 'wifi', 'slug'].forEach(k => f[k].value = R[k] || '');
   $$('[data-pg]').forEach(el => { const v = R.page[el.dataset.pg]; if (el.type === 'checkbox') el.checked = !!v; else el.value = v || ''; });
   $('#themes').innerHTML = Object.entries(THEME_META).map(([k, t]) =>
-    `<div class="theme-opt" data-theme="${k}"><div class="sw" style="background:${t.bg};color:${t.fg};font-family:${t.font}">Aa<span style="width:24px;height:4px;border-radius:2px;margin-top:4px;background:var(--acc)"></span></div>${t.label}</div>`).join('');
+    `<div class="theme-opt" data-theme="${k}"><div class="sw" style="background:${t.bg || 'var(--cbg)'};color:${t.fg || 'var(--cink)'};font-family:${t.font}">Aa<span style="width:24px;height:4px;border-radius:2px;margin-top:4px;background:var(--acc)"></span></div>${t.label}</div>`).join('');
   $('#accents').innerHTML = ACCENTS.map(c => `<span class="swatch" data-c="${c}" style="background:${c}"></span>`).join('') +
     `<input type="color" id="accentCustom" title="Custom colour">`;
   $('#fonts').innerHTML = Object.entries(FONTS).map(([k, [l, fam]]) => `<div class="tile" data-font="${k}"><b style="font-family:${fam}">Aa</b>${l}</div>`).join('');
   for (const [k, opts] of Object.entries(PAGE_TILES)) $(`[data-page="${k}"]`).innerHTML = opts.map(([v, l, svg]) => `<div class="tile" data-v="${v}"><svg viewBox="0 0 40 40" width="54" height="54">${svg}</svg>${l}</div>`).join('');
+  $('[data-page="bgMode"]').innerHTML = BG_MODES.map(([v, l]) => `<button type="button" class="chip" data-v="${v}">${l}</button>`).join('');
+  $('#gfonts').innerHTML = GOOGLE_FONTS.map(f => `<option value="${f}">`).join('');
   $('[data-page="order"]').innerHTML = ORDER.map(([v, l]) => `<button type="button" class="chip" data-v="${v}">${l}</button>`).join('');
   paintDesign(); paintImages();
 }
 function paintDesign() {
-  $$('.theme-opt').forEach(el => { el.classList.toggle('sel', el.dataset.theme === draft.theme); el.style.setProperty('--acc', draft.accent); });
+  $$('.theme-opt').forEach(el => { el.classList.toggle('sel', el.dataset.theme === draft.theme); el.style.setProperty('--acc', draft.accent); el.style.setProperty('--cbg', draft.page.colors.bg); el.style.setProperty('--cink', draft.page.colors.ink); });
+  $('.custom-colours').classList.toggle('hidden', draft.theme !== 'custom');
+  $$('[data-color]').forEach(el => el.value = draft.page.colors[el.dataset.color]);
+  $('#nameCaps').checked = draft.page.nameCase === 'upper';
+  $('.bg-up').classList.toggle('hidden', draft.page.bgMode !== 'photo');
   $$('.swatch').forEach(el => el.classList.toggle('sel', el.dataset.c === draft.accent));
   $('#accentCustom').value = draft.accent;
   $$('#fonts .tile').forEach(el => el.classList.toggle('sel', el.dataset.font === draft.page.font));
   $$('#tab-design [data-page]').forEach(g => { g.style.setProperty('--a', draft.accent); g.querySelectorAll('[data-v]').forEach(el => el.classList.toggle('sel', el.dataset.v === draft.page[g.dataset.page])); });
 }
 function paintImages() {
-  for (const k of ['logo', 'cover', 'qr_logo']) {
-    const prev = $(`#${k === 'qr_logo' ? 'qrLogo' : k}Prev`);
+  for (const k of ['logo', 'cover', 'qr_logo', 'bg_image']) {
+    const prev = $(`#${{ qr_logo: 'qrLogo', bg_image: 'bg' }[k] || k}Prev`);
     prev.style.backgroundImage = R[k] ? `url("${R[k]}")` : '';
     $(`[data-rm="${k}"]`).classList.toggle('hidden', !R[k]);
   }
@@ -365,7 +422,8 @@ function paintImages() {
 function currentDraft() {
   const f = $('#profileForm'), out = { ...R, theme: draft.theme, accent: draft.accent, page: { ...draft.page } };
   ['name', 'tagline', 'address', 'phone', 'hours', 'wifi'].forEach(k => out[k] = f[k].value);
-  $$('[data-pg]').forEach(el => out.page[el.dataset.pg] = el.type === 'checkbox' ? el.checked : el.value);
+  $$('[data-pg]').forEach(el => out.page[el.dataset.pg] = el.type === 'checkbox' ? el.checked : el.value.trim());
+  out.page.nameCase = $('#nameCaps').checked ? 'upper' : 'none';
   return out;
 }
 let previewLoaded = false, previewTimer;
@@ -389,6 +447,8 @@ $('#tab-design').addEventListener('click', e => {
 });
 $('#tab-design').addEventListener('input', e => {
   if (e.target.id === 'accentCustom') { draft.accent = e.target.value; paintDesign(); }
+  if (e.target.id === 'nameCaps') draft.page.nameCase = e.target.checked ? 'upper' : 'none';
+  if (e.target.dataset.color) { draft.page.colors[e.target.dataset.color] = e.target.value; $$('.theme-opt').forEach(el => { el.style.setProperty('--cbg', draft.page.colors.bg); el.style.setProperty('--cink', draft.page.colors.ink); }); }
   pushPreview();
 });
 async function saveDesign() {
@@ -418,10 +478,13 @@ document.addEventListener('click', async e => {
 $('#imgInput').onchange = async e => {
   const file = e.target.files[0]; e.target.value = ''; if (!file) return;
   try {
-    const small = await resizeImage(file, upField === 'cover' ? 1800 : 700, upField !== 'cover');
+    const big = upField === 'cover' || upField === 'bg_image';
+    const small = await resizeImage(file, big ? 2000 : 700, !big);
     const fd = new FormData(); fd.append('file', small);
     const { url } = await api('/api/restaurant/' + upField.replace('_', '-'), { method: 'POST', body: fd });
-    R[upField] = url; paintImages(); updateLogoUi(); renderQr(); pushPreview(); toast('Image uploaded');
+    R[upField] = url; paintImages(); updateLogoUi(); renderQr();
+    if (upField === 'bg_image') { draft.page.bgMode = 'photo'; paintDesign(); }
+    pushPreview(); toast('Image uploaded');
   } catch (x) { toast(x.message); }
 };
 

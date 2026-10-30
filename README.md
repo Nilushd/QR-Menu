@@ -16,12 +16,18 @@ Restaurants register, upload their menu PDFs, design a branded QR code, and prin
   - dish names, using the font style that sits next to prices
   - prices like `1,450`, `$12.50`, `Rs. 950`, `LKR 2,800` or `450 / 800`, whether after dot leaders, in a separate column or on their own line
   - descriptions, and the **photo next to each dish**, cropped to what's visible (round and rounded photos included)
-  - the PDF's colours, which you can apply to your menu page (accent colour and a dark style)
+  - **the PDF's style**:
+    - its exact text colours (main text, descriptions and accent) and background colour
+    - its **font families**, which load from Google Fonts when available, such as Playfair Display or Great Vibes, and whether dish names are in capitals
+    - its **background artwork** (chalkboard, paper, photo), taken from the original embedded image at full resolution so no text is printed over it
+    - its subtitle, used as your tagline
 
   You can review and edit every dish before importing, and dishes you already have are skipped. Works with one or two columns, several pages, and PDFs from Canva, Word, InDesign or a browser. A scanned PDF (a picture with no selectable text) is detected and explained, because it would need OCR.
 - **Menu page design**, with a live phone preview that updates as you edit:
-  - 5 colour styles plus an accent colour, and 7 font pairings
-  - 3 header styles (full photo, compact, minimal) and 3 dish layouts (grid, list, magazine)
+  - 5 colour styles or a **custom palette** (background, cards, text, descriptions), plus an accent colour
+  - 7 font pairings, or **any Google Font** for headings, dish names and body text
+  - **Page background:** plain, paper texture, or your own image (it's softened so text stays readable)
+  - 3 header styles (full photo, compact, minimal) and 4 dish layouts. **Classic menu** reads like a printed menu: dot leaders to the price, italic descriptions, ornamental section titles and framed round photos. The others are grid, list and magazine.
   - Logo, cover photo, tagline, an announcement banner, currency, and whether dishes or PDFs come first
   - Optional "Chef's picks" carousel and dish search
   - Phone, address, opening hours, Wi‑Fi, Instagram, Facebook, website and WhatsApp

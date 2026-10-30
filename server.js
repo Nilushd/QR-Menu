@@ -42,7 +42,7 @@ db.exec(`
     hours TEXT DEFAULT '',
     wifi TEXT DEFAULT '',
     theme TEXT DEFAULT 'elegant',
-    accent TEXT DEFAULT '#c8553d',
+    accent TEXT DEFAULT '#1f6f5c',
     logo TEXT,
     cover TEXT,
     qr_design TEXT,
@@ -83,27 +83,39 @@ db.exec(`
 const cols = db.prepare('PRAGMA table_info(restaurants)').all().map(c => c.name);
 if (!cols.includes('qr_logo')) db.exec('ALTER TABLE restaurants ADD COLUMN qr_logo TEXT');
 if (!cols.includes('page')) db.exec("ALTER TABLE restaurants ADD COLUMN page TEXT DEFAULT '{}'");
+if (!cols.includes('bg_image')) db.exec('ALTER TABLE restaurants ADD COLUMN bg_image TEXT');
 
-const THEMES = ['elegant', 'modern', 'rustic', 'midnight', 'fresh'];
+const THEMES = ['elegant', 'modern', 'rustic', 'midnight', 'fresh', 'custom'];
 const DISH_TAGS = ['chef', 'popular', 'new', 'veg', 'vegan', 'spicy', 'gf', 'seafood'];
 // Guest page settings: [allowed values] or max text length
 const PAGE_OPTIONS = {
   font: ['auto', 'classic', 'elegant', 'modern', 'friendly', 'bold', 'script'],
   hero: ['full', 'compact', 'minimal'],
-  layout: ['grid', 'list', 'magazine'],
+  layout: ['classic', 'grid', 'list', 'magazine'],
+  bgMode: ['none', 'photo', 'paper'],
+  nameCase: ['none', 'upper'],
   order: ['dishes', 'pdf'],
   featured: [true, false],
   search: [true, false],
   currency: 12, announcement: 140, instagram: 200, facebook: 200, website: 200, whatsapp: 30,
+  headFont: 40, nameFont: 40, bodyFont: 40,
 };
-const PAGE_DEFAULTS = { font: 'auto', hero: 'full', layout: 'grid', order: 'dishes', featured: true, search: true,
-  currency: '', announcement: '', instagram: '', facebook: '', website: '', whatsapp: '' };
+const COLOR_KEYS = ['bg', 'surface', 'ink', 'muted'];
+const PAGE_DEFAULTS = { font: 'auto', hero: 'full', layout: 'classic', order: 'dishes', featured: true, search: true,
+  currency: '', announcement: '', instagram: '', facebook: '', website: '', whatsapp: '',
+  bgMode: 'none', nameCase: 'none', headFont: '', nameFont: '', bodyFont: '', colors: { bg: '#f6f3ee', surface: '#ffffff', ink: '#1d2421', muted: '#5f6b66' } };
 function cleanPage(input, prev) {
   const out = { ...PAGE_DEFAULTS, ...prev };
   for (const [k, rule] of Object.entries(PAGE_OPTIONS)) {
     if (input[k] === undefined) continue;
     if (Array.isArray(rule)) { if (rule.includes(input[k])) out[k] = input[k]; }
     else out[k] = String(input[k]).trim().slice(0, rule);
+  }
+  // Google Font family names only: letters, digits and spaces
+  for (const k of ['headFont', 'nameFont', 'bodyFont']) if (!/^[A-Za-z0-9 ]*$/.test(out[k])) out[k] = '';
+  if (input.colors && typeof input.colors === 'object') {
+    out.colors = { ...PAGE_DEFAULTS.colors, ...prev.colors };
+    for (const k of COLOR_KEYS) if (/^#[0-9a-fA-F]{6}$/.test(input.colors[k] || '')) out.colors[k] = input.colors[k].toLowerCase();
   }
   for (const k of ['instagram', 'facebook', 'website']) {
     if (out[k] && !/^https?:\/\//i.test(out[k])) out[k] = 'https://' + out[k].replace(/^\/+/, '');
@@ -139,6 +151,7 @@ function restaurantJson(r) {
     page: { ...PAGE_DEFAULTS, ...JSON.parse(r.page || '{}') },
     dishes: dishes.map(dishJson),
     qr_logo: r.qr_logo ? `/uploads/${r.qr_logo}` : null,
+    bg_image: r.bg_image ? `/uploads/${r.bg_image}` : null,
     qr_design: r.qr_design ? JSON.parse(r.qr_design) : null,
     menus: menus.map(m => ({ ...m, url: `/uploads/${m.file}` })),
     logo: r.logo ? `/uploads/${r.logo}` : null,
@@ -278,7 +291,7 @@ app.put('/api/restaurant', auth, (req, res) => {
   for (const f of PROFILE_FIELDS) v[f] = b[f] !== undefined ? String(b[f]).trim().slice(0, f === 'hours' || f === 'address' ? 300 : 120) : r[f];
   if (!v.name) return res.status(400).json({ error: 'Restaurant name is required.' });
   if (!THEMES.includes(v.theme)) v.theme = 'elegant';
-  if (!/^#[0-9a-fA-F]{6}$/.test(v.accent)) v.accent = '#c8553d';
+  if (!/^#[0-9a-fA-F]{6}$/.test(v.accent)) v.accent = '#1f6f5c';
   let slug = r.slug;
   if (b.slug !== undefined && slugify(b.slug) !== r.slug) {
     slug = slugify(b.slug);
@@ -292,7 +305,7 @@ app.put('/api/restaurant', auth, (req, res) => {
   res.json({ restaurant: restaurantJson(db.prepare('SELECT * FROM restaurants WHERE id = ?').get(r.id)) });
 });
 
-for (const field of ['logo', 'cover', 'qr_logo']) {
+for (const field of ['logo', 'cover', 'qr_logo', 'bg_image']) {
   app.post(`/api/restaurant/${field.replace('_', '-')}`, auth, handleUpload(imageUpload, 'image'), (req, res) => {
     removeUpload(req.restaurant[field]);
     db.prepare(`UPDATE restaurants SET ${field} = ? WHERE id = ?`).run(req.file.filename, req.restaurant.id);

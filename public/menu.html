@@ -12,6 +12,23 @@
 [data-theme=midnight]{--bg:#111216;--surface:#1b1c22;--ink:#f3efe8;--muted:#a19c93;--line:rgba(255,255,255,.09);--shadow:0 12px 40px rgba(0,0,0,.5)}
 [data-theme=fresh]{--bg:#eef8f3;--ink:#16352a;--muted:#5d7a6e;--radius:22px}
 [data-theme=rustic] body{background-image:radial-gradient(rgba(74,52,35,.06) 1px,transparent 1px);background-size:6px 6px}
+/* Custom palette (from the restaurant's own PDF or chosen by hand) is applied as inline variables */
+[data-theme=custom]{--line:color-mix(in srgb,var(--ink) 14%,transparent)}
+:root{--name:var(--head);--name-case:none}
+
+/* Page background artwork */
+.backdrop{position:fixed;inset:0;z-index:-1;background:var(--bg) center/cover no-repeat}
+[data-bg=photo] .backdrop:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 35%,transparent),color-mix(in srgb,var(--bg) 62%,transparent))}
+[data-bg=paper] .backdrop{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:240px;background-repeat:repeat}
+[data-bg=photo] body,[data-bg=paper] body{background:transparent}
+/* Without a cover photo, a custom-styled menu starts on its own background, like the printed card */
+[data-bg=photo] .hero.no-cover,body[data-theme=custom] .hero.no-cover{background:none}
+[data-bg=photo] .hero.no-cover:after,[data-bg=photo] .hero.no-cover:before,body[data-theme=custom] .hero.no-cover:after,body[data-theme=custom] .hero.no-cover:before{display:none}
+[data-bg=photo] body[data-hero=full] .hero.no-cover .hero-inner,body[data-theme=custom][data-hero=full] .hero.no-cover .hero-inner{color:var(--ink)}
+[data-bg=photo] body[data-hero=full] .hero.no-cover h1,body[data-theme=custom][data-hero=full] .hero.no-cover h1{text-shadow:none}
+[data-bg=photo] body[data-hero=full] .hero.no-cover,body[data-theme=custom][data-hero=full] .hero.no-cover{height:auto;min-height:0;padding-top:54px}
+body[data-theme=custom][data-hero=full] .hero.no-cover .tagline{color:var(--muted);letter-spacing:.04em}
+[data-bg=photo] .tabs-wrap{background:color-mix(in srgb,var(--bg) 78%,transparent)}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{--tint:color-mix(in srgb,var(--acc) 14%,var(--surface));margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--body);-webkit-font-smoothing:antialiased;min-height:100vh}
@@ -103,7 +120,7 @@ main{display:flex;flex-direction:column;padding:8px 0 30px}
 /* Dishes */
 .dish{position:relative;cursor:pointer;background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;border:1px solid var(--line);opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
 .dish.in{opacity:1;transform:none}
-.dish h3{font-family:var(--head);font-weight:600;margin:0;line-height:1.2}
+.dish h3{font-family:var(--name);text-transform:var(--name-case);font-weight:600;margin:0;line-height:1.2}
 .dish .desc{color:var(--muted);font-size:13.5px;margin:4px 0 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .dish .price{color:var(--acc);font-weight:700;white-space:nowrap}
 .dish .img{background:var(--tint) center/cover;position:relative}
@@ -140,6 +157,30 @@ main{display:flex;flex-direction:column;padding:8px 0 30px}
 [data-layout=magazine] .dish h3{font-size:26px}
 [data-layout=magazine] .dish .price{font-size:18px}
 [data-layout=magazine] .dish .desc{-webkit-line-clamp:3;font-size:14.5px}
+
+/* classic: reads like the printed menu — names and prices on one line joined by dot leaders */
+.dish .leader{display:none}
+[data-layout=classic] .dishes{display:flex;flex-direction:column}
+[data-layout=classic] .dish{display:flex;gap:14px;align-items:flex-start;background:none;border:0;box-shadow:none;border-radius:0;padding:13px 2px;overflow:visible}
+[data-layout=classic] .dish+.dish{border-top:1px solid var(--line)}
+[data-layout=classic] .dish .body{flex:1;min-width:0}
+[data-layout=classic] .dish .top{display:flex;align-items:baseline;gap:8px}
+[data-layout=classic] .dish h3{font-family:var(--name);text-transform:var(--name-case);font-size:19px;letter-spacing:.01em;min-width:0}
+[data-layout=classic] .dish .leader{display:block;flex:1;min-width:16px;border-bottom:2px dotted color-mix(in srgb,var(--ink) 35%,transparent);transform:translateY(-4px)}
+[data-layout=classic] .dish .price{font-size:16px;font-variant-numeric:tabular-nums}
+[data-layout=classic] .dish .desc{font-style:italic;font-size:14px;-webkit-line-clamp:3;margin-top:2px}
+[data-layout=classic] .dish .img{width:68px;height:68px;border-radius:50%;flex:none;margin-top:2px;box-shadow:0 0 0 2px var(--bg),0 0 0 3px color-mix(in srgb,var(--acc) 55%,transparent)}
+[data-layout=classic] .dish .img.none{display:none}
+[data-layout=classic] .dish .img .ph-letter,[data-layout=classic] .badge{display:none}
+[data-layout=classic] .dish .tags{margin-top:6px}
+[data-layout=classic] .dish .tag{background:none;border:1px solid var(--line);padding:2px 8px}
+[data-layout=classic] .dish.sold:after{position:static;align-self:center;order:3}
+[data-layout=classic] .sec-title{flex-direction:column;gap:8px;margin:40px 0 10px}
+[data-layout=classic] .sec-title:before{display:none}
+[data-layout=classic] .sec-title:after{flex:none;width:120px;height:14px;background:var(--acc);-webkit-mask:var(--ornament) center/contain no-repeat;mask:var(--ornament) center/contain no-repeat}
+:root{--ornament:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 14'%3E%3Cpath d='M0 7h46M74 7h46' stroke='black' stroke-width='1'/%3E%3Cpath d='M60 1.5l5.5 5.5-5.5 5.5-5.5-5.5z' fill='black'/%3E%3Ccircle cx='50' cy='7' r='1.6'/%3E%3Ccircle cx='70' cy='7' r='1.6'/%3E%3C/svg%3E")}
+[data-layout=classic] .cat{padding:0 2px}
+[data-layout=classic] .featured .feat-card{box-shadow:0 10px 30px rgba(0,0,0,.25)}
 
 /* PDF pages */
 .page{position:relative;background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin:0 0 18px;cursor:zoom-in;opacity:0;transform:translateY(16px);transition:opacity .6s ease,transform .6s ease}
@@ -190,7 +231,8 @@ footer a{text-decoration:none;font-weight:600}
 @media (min-width:700px){[data-layout=grid] .dishes{grid-template-columns:repeat(3,1fr)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.page,.dish{opacity:1;transform:none}}
 </style>
-</head><body data-theme="elegant" data-hero="full" data-layout="grid" data-order="dishes">
+</head><body data-theme="elegant" data-hero="full" data-layout="classic" data-order="dishes">
+<div class="backdrop" id="backdrop"></div>
 <div class="announce" id="announce" hidden></div>
 <header class="hero no-cover" id="hero"><div class="hero-inner"><div class="logo" hidden></div><h1 class="rname">&nbsp;</h1><p class="tagline"></p></div></header>
 <div class="compact-head"><div class="logo" hidden></div><div><h1 class="rname"></h1><p class="tagline"></p></div></div>
@@ -273,13 +315,27 @@ function renderLook() {
   const P = R.page || {}, b = document.body;
   document.title = `${R.name} — Menu`;
   b.dataset.theme = R.theme; b.dataset.hero = P.hero || 'full'; b.dataset.layout = P.layout || 'grid'; b.dataset.order = P.order || 'dishes';
-  const fontKey = P.font && P.font !== 'auto' ? P.font : THEME_FONT[R.theme] || 'elegant';
+  const fontKey = P.font && P.font !== 'auto' ? P.font : THEME_FONT[R.theme] || 'modern';
   b.dataset.font = fontKey;
   const F = FONTS[fontKey];
+  // Fonts named after the restaurant's own PDF (any Google Font) take priority over the chosen pairing
+  const own = [P.headFont, P.nameFont, P.bodyFont].filter(Boolean);
   const href = `https://fonts.googleapis.com/css2?family=${F[0]}&display=swap`;
   if ($('#fontLink').getAttribute('href') !== href) $('#fontLink').href = href;
-  b.style.setProperty('--head', F[1]); b.style.setProperty('--body', F[2]); b.style.setProperty('--acc', R.accent);
-  document.querySelector('meta[name=theme-color]').content = R.accent;
+  const ownHref = own.length ? `https://fonts.googleapis.com/css?family=${[...new Set(own)].map(f => encodeURIComponent(f) + ':400,500,600,700').join('|')}&display=swap` : '';
+  let ownLink = $('#ownFonts');
+  if (ownHref && !ownLink) { ownLink = document.createElement('link'); ownLink.id = 'ownFonts'; ownLink.rel = 'stylesheet'; document.head.appendChild(ownLink); }
+  if (ownLink && ownLink.getAttribute('href') !== ownHref) ownLink.href = ownHref;
+  const fam = (name, fallback) => name ? `'${name}',${fallback}` : fallback;
+  b.style.setProperty('--head', fam(P.headFont, F[1])); b.style.setProperty('--body', fam(P.bodyFont, F[2]));
+  b.style.setProperty('--name', fam(P.nameFont || P.headFont, fam(P.headFont, F[1])));
+  b.style.setProperty('--name-case', P.nameCase === 'upper' ? 'uppercase' : 'none');
+  b.style.setProperty('--acc', R.accent);
+  for (const k of ['bg', 'surface', 'ink', 'muted']) b.style.removeProperty('--' + k);
+  if (R.theme === 'custom' && P.colors) for (const k of ['bg', 'surface', 'ink', 'muted']) if (P.colors[k]) b.style.setProperty('--' + k, P.colors[k]);
+  document.documentElement.dataset.bg = P.bgMode === 'photo' && R.bg_image ? 'photo' : P.bgMode === 'paper' ? 'paper' : 'none';
+  $('#backdrop').style.backgroundImage = document.documentElement.dataset.bg === 'photo' ? `url("${R.bg_image}")` : '';
+  document.querySelector('meta[name=theme-color]').content = getComputedStyle(b).getPropertyValue('--bg').trim() || R.accent;
   $$('.rname').forEach(e => e.textContent = R.name);
   $$('.tagline').forEach(e => { e.textContent = R.tagline || ''; e.hidden = !R.tagline; });
   const h = $('#hero');
@@ -314,7 +370,7 @@ function dishCard(d) {
   const badge = d.featured ? '<span class="badge">⭐ Chef\'s pick</span>' : d.tags.includes('popular') ? '<span class="badge">🔥 Popular</span>' : d.tags.includes('new') ? '<span class="badge">✨ New</span>' : '';
   return `<article class="dish${d.available ? '' : ' sold'}" data-id="${d.id}" tabindex="0" role="button" aria-label="${esc(d.name)}">
     <div class="img${d.photo ? '' : ' none'}" ${d.photo ? `style="background-image:url('${d.photo}')"` : ''}>${d.photo ? '' : `<span class="ph-letter">${letter(d.name)}</span>`}${badge}</div>
-    <div class="body"><div class="top"><h3>${esc(d.name)}</h3><span class="price">${esc(priceText(d.price))}</span></div>
+    <div class="body"><div class="top"><h3>${esc(d.name)}</h3>${d.price ? '<span class="leader"></span>' : ''}<span class="price">${esc(priceText(d.price))}</span></div>
       ${d.description ? `<p class="desc">${esc(d.description)}</p>` : ''}${tagHtml ? `<div class="tags">${tagHtml}</div>` : ''}</div></article>`;
 }
 function renderDishes() {

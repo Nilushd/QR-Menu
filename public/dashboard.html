@@ -62,8 +62,27 @@
           </div>
           <div class="ctrl-group"><h3>Look &amp; feel</h3>
             <div class="field"><label>Colour style</label><div class="themes" id="themes"></div></div>
+            <div class="field custom-colours hidden"><label>Custom colours</label><div class="colour-grid">
+              <label class="cpick"><input type="color" data-color="bg"> Background</label>
+              <label class="cpick"><input type="color" data-color="surface"> Cards</label>
+              <label class="cpick"><input type="color" data-color="ink"> Text</label>
+              <label class="cpick"><input type="color" data-color="muted"> Descriptions</label></div></div>
             <div class="field"><label>Accent colour</label><div class="color-row" id="accents"></div></div>
             <div class="field"><label>Fonts</label><div class="tiles fonts" id="fonts"></div></div>
+            <div class="field"><label>Your own fonts <span class="hint" style="font-weight:400">— any <a href="https://fonts.google.com" target="_blank" rel="noopener">Google Font</a> name; leave empty to use the pairing above</span></label>
+              <div class="grid3">
+                <input type="text" data-pg="headFont" list="gfonts" maxlength="40" placeholder="Headings, e.g. Playfair Display">
+                <input type="text" data-pg="nameFont" list="gfonts" maxlength="40" placeholder="Dish names">
+                <input type="text" data-pg="bodyFont" list="gfonts" maxlength="40" placeholder="Body text, e.g. Lato">
+              </div>
+              <label class="toggle" style="margin-top:10px"><input type="checkbox" id="nameCaps"> Dish names in capitals</label>
+              <datalist id="gfonts"></datalist></div>
+            <div class="field"><label>Page background</label>
+              <div class="chips" data-page="bgMode" style="margin-bottom:10px"></div>
+              <div class="img-up bg-up"><div class="preview wide" id="bgPrev"></div><div>
+                <button type="button" class="btn btn-ghost btn-sm" data-up="bg_image">Upload background</button>
+                <button type="button" class="btn btn-danger btn-sm hidden" data-rm="bg_image">Remove</button>
+                <div class="hint">A texture or photo: chalkboard, wood, paper, linen… It's softened so text stays readable.</div></div></div></div>
             <div class="field"><label>Header style</label><div class="tiles" data-page="hero"></div></div>
             <div class="field"><label>Dish layout</label><div class="tiles" data-page="layout"></div></div>
           </div>

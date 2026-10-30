@@ -51,9 +51,9 @@ async function pageLines(page, vp) {
     if (!it.str || !it.str.trim()) continue;
     const t = it.transform, size = Math.hypot(t[2], t[3]) || it.height;
     const [x, y] = vp.convertToViewportPoint(t[4], t[5]);
-    let bold = false;
-    try { const f = page.commonObjs.get(it.fontName); bold = !!(f.bold || f.black || /bold|black|heavy|semibold|demi/i.test(f.name || '')); } catch {}
-    items.push({ str: it.str, x, y, w: it.width * vp.scale, size, font: it.fontName, bold });
+    let bold = false, family = null;
+    try { const f = page.commonObjs.get(it.fontName); bold = !!(f.bold || f.black || /bold|black|heavy|semibold|demi/i.test(f.name || '')); family = fontFamily(f.name); } catch {}
+    items.push({ str: it.str, x, y, w: it.width * vp.scale, size, font: it.fontName, bold, family });
   }
   return items;
 }
@@ -105,12 +105,14 @@ function toLines(items) {
     for (const it of l.items) {
       const gap = prevEnd === null ? 0 : it.x - prevEnd;
       if (prevEnd !== null && gap > (gapMin ?? it.size * .18) && !/\s$/.test(text) && !/^\s/.test(it.str)) text += ' ';
-      text += spaced ? it.str.trim() : it.str; prevEnd = it.x + it.w;
+      // A single run like "S E A F O O D" is one letter-spaced word
+      const str = /^(\S ){2,}\S$/.test(it.str.trim()) ? it.str.trim().replace(/ /g, '') : it.str;
+      text += spaced ? str.trim() : str; prevEnd = it.x + it.w;
     }
     l.text = unspace(text).replace(/\s+/g, ' ').trim();
     // Style of the line = style of its longest run of text
     const main = l.items.reduce((a, b) => (b.str.length > a.str.length ? b : a));
-    l.size = main.size; l.bold = main.bold; l.font = main.font;
+    l.size = main.size; l.bold = main.bold; l.font = main.font; l.family = main.family;
     l.x0 = Math.min(...l.items.map(i => i.x)); l.x1 = Math.max(...l.items.map(i => i.x + i.w));
     l.top = l.y - l.size; l.bottom = l.y + l.size * .25;
   }
@@ -155,11 +157,53 @@ async function pageImages(page, vp) {
     else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageXObjectRepeat) {
       const box = meet(toBox([[0, 0], [1, 0], [0, 1], [1, 1]]), clip);
       const w = box.x1 - box.x0, h = box.y1 - box.y0;
-      // Skip tiny icons and full-page backgrounds
-      if (w > 36 && h > 36 && w * h < vp.width * vp.height * .45) out.push(box);
+      box.id = fn === OPS.paintInlineImageXObject ? null : args[0];
+      box.area = w * h / (vp.width * vp.height);
+      // Skip tiny icons; images covering much of the page are backgrounds
+      if (w > 36 && h > 36) out.push(box);
     }
   }
   return out;
+}
+
+// Colours the PDF actually uses for text, weighted by number of characters
+async function textColours(page) {
+  const ops = await page.getOperatorList();
+  const counts = new Map(), stack = [];
+  let fill = '#000000';
+  const TEXT = [OPS.showText, OPS.showSpacedText, OPS.nextLineShowText, OPS.nextLineSetSpacingShowText];
+  for (let i = 0; i < ops.fnArray.length; i++) {
+    const fn = ops.fnArray[i], a = ops.argsArray[i];
+    if (fn === OPS.save) stack.push(fill);
+    else if (fn === OPS.restore) fill = stack.pop() ?? fill;
+    else if (fn === OPS.setFillRGBColor) fill = rgbToHex([a[0], a[1], a[2]]);
+    else if (TEXT.includes(fn)) {
+      const glyphs = (Array.isArray(a[0]) ? a[0] : a[a.length - 1] || []).filter(g => g && g.unicode && g.unicode.trim()).length;
+      counts.set(fill, (counts.get(fill) || 0) + glyphs);
+    }
+  }
+  return [...counts.entries()].sort((x, y) => y[1] - x[1]);
+}
+const hue = h => { const [r, g, b] = hexToRgb(h).map(v => v / 255); const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (!d) return 0; const x = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return (x * 60 + 360) % 360; };
+const hueGap = (a, b) => { const d = Math.abs(hue(a) - hue(b)); return Math.min(d, 360 - d); };
+const saturation = h => { const [r, g, b] = hexToRgb(h); const mx = Math.max(r, g, b), mn = Math.min(r, g, b); return mx ? (mx - mn) / mx : 0; };
+
+// Decode an embedded image at its original resolution (no text drawn over it)
+async function originalImage(page, id) {
+  try {
+    const obj = await new Promise((res, rej) => { page.objs.get(id, res); setTimeout(() => rej(new Error('timeout')), 5000); });
+    const k = Math.min(1, 2000 / Math.max(obj.width, obj.height));
+    const c = document.createElement('canvas'); c.width = Math.round(obj.width * k); c.height = Math.round(obj.height * k);
+    const ctx = c.getContext('2d');
+    if (obj.bitmap) ctx.drawImage(obj.bitmap, 0, 0, c.width, c.height);
+    else if (obj.data && obj.data.length === obj.width * obj.height * 4) {
+      const t = document.createElement('canvas'); t.width = obj.width; t.height = obj.height;
+      t.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(obj.data), obj.width, obj.height), 0, 0);
+      ctx.drawImage(t, 0, 0, c.width, c.height);
+    } else return null;
+    return await new Promise(r => c.toBlob(r, 'image/jpeg', .85));
+  } catch { return null; }
 }
 
 function rectDist(a, b) {
@@ -179,6 +223,7 @@ function parseColumn(lines, ctx, col) {
     const nameLike = styleKey === ctx.nameStyle || (l.bold && l.size >= ctx.body * .95 && !ctx.descBold);
     const box = { x0: l.x0, y0: l.top, x1: l.x1, y1: l.bottom };
     const grow = d => { d.box = d.box ? { x0: Math.min(d.box.x0, box.x0), y0: Math.min(d.box.y0, box.y0), x1: Math.max(d.box.x1, box.x1), y1: Math.max(d.box.y1, box.y1) } : { ...box }; };
+    if (heading) { ctx.fam.head.push(l.family); } else if (!p && !nameLike && l.text.length > 25) ctx.fam.body.push(l.family); else if (nameLike || p) ctx.fam.name.push(l.family);
     if (heading) { ctx.headings.push({ text: l.text.replace(/[:\-–—]+$/, '').trim(), y: l.y, col, x0: l.x0, x1: l.x1 }); cur = null; continue; }
     if (p && p.name) {
       if (cur && !cur.price && !nameLike) { cur.price = p.price; cur.description = (cur.description + ' ' + p.name).trim(); grow(cur); continue; }
@@ -198,6 +243,20 @@ function parseColumn(lines, ctx, col) {
   return dishes;
 }
 
+// "AAAAAA+PlayfairDisplay-BoldItalic" -> "Playfair Display"
+function fontFamily(raw) {
+  if (!raw) return null;
+  let n = raw.replace(/^[A-Z]{6}\+/, '').split(/[-,_]/)[0];
+  n = n.replace(/(Regular|Italic|Oblique|Roman|Book|Thin|Hairline|ExtraLight|UltraLight|Light|Medium|SemiBold|DemiBold|ExtraBold|UltraBold|Bold|Black|Heavy|Condensed)+$/i, '').replace(/(MT|PS|Std|Pro|LT|OT)$/, '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2').trim();
+  if (!n || /^(Times|Helvetica|Arial|Courier|Symbol|Zapf|Calibri|Cambria|Segoe|Liberation|DejaVu|Nimbus|Bitstream|Free ?(Sans|Serif|Mono)|T\d+|F\d+|Font)/i.test(n)) return null;
+  return n.slice(0, 40);
+}
+const hexToRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const rgbToHex = c => '#' + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+const luminance = h => { const v = hexToRgb(h).map(x => x / 255).map(x => x <= .03928 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4); return .2126 * v[0] + .7152 * v[1] + .0722 * v[2]; };
+const contrast = (a, b) => { const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m); return (x + .05) / (y + .05); };
+const mix = (a, b, t) => rgbToHex(hexToRgb(a).map((v, i) => v + (hexToRgb(b)[i] - v) * t));
+
 function sampleColours(canvas) {
   const ctx = canvas.getContext('2d'), { width, height } = canvas;
   const data = ctx.getImageData(0, 0, width, height).data;
@@ -209,11 +268,16 @@ function sampleColours(canvas) {
     const max = Math.max(r, g, b), min = Math.min(r, g, b), sat = max ? (max - min) / max : 0;
     if (sat > .45 && max > 70 && max < 245) accent.set(key, (accent.get(key) || 0) + 1);
   }
-  const top = m => [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-  const hex = k => k == null ? null : '#' + [k >> 8, (k >> 4) & 15, k & 15].map(v => (v * 16 + 8).toString(16).padStart(2, '0')).join('');
-  const bg = hex(top(bins)), acc = accent.size ? hex(top(accent)) : null;
-  const lum = h => { const v = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255); return .2126 * v[0] + .7152 * v[1] + .0722 * v[2]; };
-  return { background: bg, accent: acc, dark: bg ? lum(bg) < .3 : false };
+  const ranked = m => [...m.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  const hex = k => '#' + [k >> 8, (k >> 4) & 15, k & 15].map(v => (v * 16 + 8).toString(16).padStart(2, '0')).join('');
+  const all = ranked(bins).map(hex);
+  const bg = all[0];
+  const dark = luminance(bg) < .3;
+  // Text colour: the most common colour that is clearly readable on the background
+  let ink = all.find(c => contrast(c, bg) >= 4.5) || (dark ? '#f5f1ea' : '#1c1c1c');
+  const acc = ranked(accent).map(hex).find(c => contrast(c, bg) >= 1.8) || null;
+  const surface = dark ? mix(bg, '#ffffff', .06) : mix(bg, '#ffffff', .55);
+  return { background: bg, ink, accent: acc, surface, muted: mix(ink, bg, .38), dark };
 }
 
 /** Returns { dishes: [{name, price, description, category, photo (Blob|null)}], colours, hasText, pages } */
@@ -251,7 +315,7 @@ export async function extractMenu(url, { onProgress } = {}) {
   });
   const nameStyle = [...styleCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
   const nameLines = colLines.flat(2).filter(l => l.font + '|' + Math.round(l.size) === nameStyle);
-  const ctx = { body, nameStyle, nameSize: nameStyle ? +nameStyle.split('|')[1] : body, lastCategory: '', descBold: descBold.filter(Boolean).length > descBold.length / 2, nameIsCaps: nameLines.length ? nameLines.filter(l => isCaps(l.text)).length > nameLines.length / 2 : null };
+  const ctx = { fam: { head: [], name: [], body: [] }, body, nameStyle, nameSize: nameStyle ? +nameStyle.split('|')[1] : body, lastCategory: '', descBold: descBold.filter(Boolean).length > descBold.length / 2, nameIsCaps: nameLines.length ? nameLines.filter(l => isCaps(l.text)).length > nameLines.length / 2 : null };
 
   const dishes = [];
   for (let pi = 0; pi < pagesData.length; pi++) {
@@ -271,7 +335,13 @@ export async function extractMenu(url, { onProgress } = {}) {
     const lastH = ctx.headings.sort((a, b) => a.col - b.col || a.y - b.y).at(-1);
     if (lastH) ctx.lastCategory = lastH.text;
     // Photos: render the page once and crop each image's area, then give it to the nearest dish
-    const imgs = await pageImages(page, vp);
+    const allImgs = await pageImages(page, vp);
+    const imgs = allImgs.filter(b => b.area < .45);
+    // Background artwork: the biggest image covering much of the first page, taken at original resolution
+    if (pi === 0) {
+      const bgImg = allImgs.filter(b => b.area >= .45 && b.id).sort((a, b) => b.area - a.area)[0];
+      if (bgImg) ctx.background = await originalImage(page, bgImg.id);
+    }
     if (imgs.length && pageDishes.length) {
       const scale = 2.5, canvas = document.createElement('canvas'), pv = page.getViewport({ scale });
       canvas.width = pv.width; canvas.height = pv.height;
@@ -303,8 +373,35 @@ export async function extractMenu(url, { onProgress } = {}) {
     dishes.push(...pageDishes);
     onProgress?.(.4 + (pi + 1) / pagesData.length * .6);
   }
+  // Prefer the exact text colours from the PDF over pixel sampling
+  if (ctx.colours) {
+    const tc = await textColours(pagesData[0].page), bg = ctx.colours.background;
+    const total = tc.reduce((a, [, n]) => a + n, 0) || 1;
+    // Main text: frequent and high-contrast (descriptions are frequent but usually softer)
+    const ink = tc.filter(([c]) => contrast(c, bg) >= 3.5).sort((a, b) => b[1] * contrast(b[0], bg) ** 2 - a[1] * contrast(a[0], bg) ** 2)[0]?.[0];
+    // Accent: the most-used clearly coloured text (headings, prices)
+    const acc = tc.find(([c, n]) => c !== ink && saturation(c) > .3 && contrast(c, bg) >= 1.8 && n / total > .02 &&
+      (!ink || saturation(ink) < .2 || hueGap(c, ink) > 30))?.[0];
+    // Secondary text: the most-used remaining neutral colour
+    const muted = tc.find(([c]) => c !== ink && c !== acc && saturation(c) <= .5 && contrast(c, bg) >= 2.5)?.[0];
+    if (ink) ctx.colours.ink = ink;
+    ctx.colours.muted = muted || mix(ctx.colours.ink, bg, .38);
+    if (acc) ctx.colours.accent = acc;
+  }
+  // Title and subtitle: the largest line near the top of page 1, and the short line right under it
+  let subtitle = '';
+  const first = colLines[0].flat().filter(l => l.y < pagesData[0].vp.height * .3).sort((a, b) => a.y - b.y);
+  const title = first.reduce((a, l) => (!a || l.size > a.size ? l : a), null);
+  if (title) {
+    const next = first.find(l => l.y > title.y && l.y - title.y < title.size * 2.5 && l.size < title.size * .7);
+    if (next && !parsePrice(next.text) && next.text.length <= 60) subtitle = tidy(next.text);
+  }
+  const pick = arr => { const c = new Map(); arr.filter(Boolean).forEach(f => c.set(f, (c.get(f) || 0) + 1)); return [...c.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null; };
+  const fonts = { head: pick(ctx.fam.head) || pick(ctx.fam.name), name: pick(ctx.fam.name), body: pick(ctx.fam.body) || pick(ctx.fam.name), nameCaps: ctx.nameIsCaps === true };
   const clean = dishes
     .filter(d => d.name && d.name.length <= 80 && /[a-z]/i.test(d.name) && (d.price || d.description || d.photo))
     .map(d => ({ name: tidy(d.name), price: d.price, description: d.description.slice(0, 400), category: tidy(d.category).slice(0, 40), photo: d.photo || null }));
-  return { dishes: clean, colours: ctx.colours, hasText: true, pages: pdf.numPages };
+  // A "subtitle" that is really the first category heading is not a tagline
+  if (clean.some(d => d.category.toLowerCase() === subtitle.toLowerCase())) subtitle = '';
+  return { dishes: clean, title: title ? tidy(title.text) : '', subtitle, colours: ctx.colours, fonts, background: ctx.background || null, hasText: true, pages: pdf.numPages };
 }
