@@ -22,7 +22,7 @@ Restaurants register, upload their menu PDFs, design a branded QR code, and prin
     - its **background artwork** (chalkboard, paper, photo), taken from the original embedded image at full resolution so no text is printed over it
     - its subtitle, used as your tagline
 
-  You can review and edit every dish before importing, and dishes you already have are skipped. Works with one or two columns, several pages, and PDFs from Canva, Word, InDesign or a browser. A scanned PDF (a picture with no selectable text) is detected and explained, because it would need OCR.
+  You can review and edit every dish before importing, and dishes you already have are skipped. **Photos are optional:** any dish without a photo from the PDF gets an **＋ Add photo** button (click, or drop an image), and any photo found in the PDF can be replaced or removed. After importing, dishes without photos show a one‑click **Add photo** on the Dishes tab. Works with one or two columns, several pages, and PDFs from Canva, Word, InDesign or a browser. A scanned PDF (a picture with no selectable text) is detected and explained, because it would need OCR.
 - **Menu page design**, with a live phone preview that updates as you edit:
   - 5 colour styles or a **custom palette** (background, cards, text, descriptions), plus an accent colour
   - 7 font pairings, or **any Google Font** for headings, dish names and body text

@@ -87,10 +87,11 @@ function renderDishes() {
   }
   const groups = {};
   R.dishes.forEach((d, i) => (groups[d.category || 'Uncategorised'] ||= []).push({ ...d, i }));
-  box.innerHTML = Object.entries(groups).map(([cat, list]) => `<h3 class="cat-head">${esc(cat)} <span>${list.length}</span></h3>
+  const noPhoto = R.dishes.filter(d => !d.photo).length;
+  box.innerHTML = (noPhoto ? `<p class="imp-note">${noPhoto} of ${R.dishes.length} dishes have no photo. Photos are optional — dishes without one still show neatly. Click <b>＋ Add photo</b> or drop an image on a dish to add one.</p>` : '') + Object.entries(groups).map(([cat, list]) => `<h3 class="cat-head">${esc(cat)} <span>${list.length}</span></h3>
     <div class="dish-grid">${list.map(d => `
       <div class="dish-card${d.available ? '' : ' off'}" data-id="${d.id}">
-        <div class="dish-img" ${d.photo ? `style="background-image:url('${d.photo}')"` : ''}>${d.photo ? '' : '<span>No photo</span>'}
+        <div class="dish-img" ${d.photo ? `style="background-image:url('${d.photo}')"` : ''}>${d.photo ? '' : '<button type="button" class="add-photo" data-addphoto>＋ Add photo<small>optional</small></button>'}
           ${d.featured ? '<em class="feat">⭐ Featured</em>' : ''}${d.available ? '' : '<em class="sold">Unavailable</em>'}</div>
         <div class="dish-body"><div class="dish-top"><strong>${esc(d.name)}</strong><b>${esc(priceText(d.price))}</b></div>
           ${d.tags.length ? `<div class="mini-tags">${d.tags.map(t => `<span>${TAGS[t]}</span>`).join('')}</div>` : ''}
@@ -102,11 +103,18 @@ function renderDishes() {
           </div></div></div>`).join('')}</div>`).join('');
   $('#catList').innerHTML = [...new Set(R.dishes.map(d => d.category).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('');
 }
+$('#dishList').addEventListener('dragover', e => { const t = e.target.closest('.dish-img'); if (t) { e.preventDefault(); t.classList.add('over'); } });
+$('#dishList').addEventListener('dragleave', e => e.target.closest('.dish-img')?.classList.remove('over'));
+$('#dishList').addEventListener('drop', e => {
+  const t = e.target.closest('.dish-img'); if (!t) return;
+  e.preventDefault(); t.classList.remove('over'); quickPhoto(+t.closest('.dish-card').dataset.id, e.dataTransfer.files[0]);
+});
 $('#dishList').addEventListener('click', async e => {
   const card = e.target.closest('.dish-card'); if (!card) return;
   const id = +card.dataset.id;
   try {
-    if (e.target.closest('[data-edit]') || e.target.closest('.dish-img')) openDish(R.dishes.find(d => d.id === id));
+    if (e.target.closest('[data-addphoto]')) { quickDish = id; $('#rowPhotoInput').click(); }
+    else if (e.target.closest('[data-edit]') || e.target.closest('.dish-img')) openDish(R.dishes.find(d => d.id === id));
     else if (e.target.closest('[data-dmove]')) { R = (await api(`/api/dishes/${id}/move`, { method: 'POST', body: { dir: e.target.closest('[data-dmove]').dataset.dmove } })).restaurant; renderDishes(); }
     else if (e.target.closest('[data-ddel]')) {
       if (!confirm('Delete this dish?')) return;
@@ -296,12 +304,17 @@ function renderFound() {
   setTimeout(() => keep.forEach(([id, v]) => { const el = document.getElementById(id); if (el && v !== undefined) el.checked = v; }));
   const groups = {};
   found.forEach((d, i) => (groups[d.category || 'Menu'] ||= []).push(i));
-  $('#impBody').innerHTML = styleCard() + `<label class="toggle imp-all"><input type="checkbox" id="impAll" ${found.every(d => d.use) ? 'checked' : ''}> Select all</label>` +
+  const missing = found.filter(d => d.use && !d.preview).length;
+  $('#impBody').innerHTML = styleCard() +
+    (missing ? `<p class="imp-note">${missing === found.length ? 'No dish photos were found in this PDF.' : `${missing} dish${missing > 1 ? 'es have' : ' has'} no photo.`} Photos are optional — click <b>＋ Add photo</b> on any dish to add one now, or later from Dishes &amp; photos.</p>` : '') +
+    `<label class="toggle imp-all"><input type="checkbox" id="impAll" ${found.every(d => d.use) ? 'checked' : ''}> Select all</label>` +
     Object.entries(groups).map(([cat, idx]) => `<h3 class="cat-head">${esc(cat)} <span>${idx.length}</span></h3>` + idx.map(i => {
       const d = found[i];
       return `<div class="imp-row${d.use ? '' : ' off'}" data-i="${i}">
         <input type="checkbox" data-f="use" ${d.use ? 'checked' : ''} aria-label="Import this dish">
-        <div class="imp-thumb" ${d.preview ? `style="background-image:url('${d.preview}')"` : ''}>${d.preview ? '<button type="button" class="imp-x" data-nophoto title="Don\'t use this photo">✕</button>' : '<span>No photo</span>'}</div>
+        ${d.preview
+          ? `<div class="imp-thumb" data-pickphoto title="Click or drop an image to replace this photo" style="background-image:url('${d.preview}')"><button type="button" class="imp-x" data-nophoto title="Remove this photo">✕</button></div>`
+          : `<button type="button" class="imp-thumb imp-add" data-pickphoto title="Add a photo (optional)">＋<span>Add photo</span></button>`}
         <div class="imp-fields">
           <div class="imp-line"><input type="text" data-f="name" value="${esc(d.name)}" maxlength="80" aria-label="Name"><input type="text" data-f="price" value="${esc(d.price)}" maxlength="24" class="imp-price" aria-label="Price"></div>
           <div class="imp-line"><input type="text" data-f="category" value="${esc(d.category)}" maxlength="40" class="imp-cat" aria-label="Category" placeholder="Category"><input type="text" data-f="description" value="${esc(d.description)}" maxlength="400" aria-label="Description" placeholder="Description"></div>
@@ -338,10 +351,39 @@ $('#impBody').addEventListener('input', e => {
   else d[f] = e.target.value;
 });
 $('#impBody').addEventListener('change', e => { if (e.target.dataset.f === 'category') renderFound(); });
+let photoRow = null;
+async function setRowPhoto(i, file) {
+  if (!file) return;
+  try { const small = await resizeImage(file, 1400); found[i].photo = small; found[i].preview = URL.createObjectURL(small); renderFound(); }
+  catch (x) { toast(x.message); }
+}
 $('#impBody').addEventListener('click', e => {
-  if (!e.target.closest('[data-nophoto]')) return;
-  const d = found[e.target.closest('.imp-row').dataset.i]; d.photo = null; d.preview = null; renderFound();
+  const row = e.target.closest('.imp-row'); if (!row) return;
+  if (e.target.closest('[data-nophoto]')) { const d = found[row.dataset.i]; d.photo = null; d.preview = null; return renderFound(); }
+  if (e.target.closest('[data-pickphoto]')) { photoRow = +row.dataset.i; $('#rowPhotoInput').click(); }
 });
+$('#impBody').addEventListener('dragover', e => { const t = e.target.closest('[data-pickphoto]'); if (t) { e.preventDefault(); t.classList.add('over'); } });
+$('#impBody').addEventListener('dragleave', e => e.target.closest('[data-pickphoto]')?.classList.remove('over'));
+$('#impBody').addEventListener('drop', e => {
+  const t = e.target.closest('[data-pickphoto]'); if (!t) return;
+  e.preventDefault(); setRowPhoto(+t.closest('.imp-row').dataset.i, e.dataTransfer.files[0]);
+});
+
+// The same picker serves the review dialog and the quick "Add photo" on dish cards
+let quickDish = null;
+$('#rowPhotoInput').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (photoRow !== null) { const i = photoRow; photoRow = null; return setRowPhoto(i, file); }
+  if (quickDish !== null) { const id = quickDish; quickDish = null; return quickPhoto(id, file); }
+};
+async function quickPhoto(id, file) {
+  if (!file) return;
+  try {
+    const fd = new FormData(); fd.append('file', await resizeImage(file, 1400));
+    toast('Uploading photo…');
+    R = (await api(`/api/dishes/${id}`, { method: 'PUT', body: fd })).restaurant; renderDishes(); toast('Photo added');
+  } catch (x) { toast(x.message); }
+}
 $('#impGo').onclick = async () => {
   const list = found.filter(d => d.use && d.name.trim());
   const btn = $('#impGo'); btn.disabled = true;
