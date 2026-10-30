@@ -43,6 +43,13 @@ Restaurants register, upload their menu PDFs, design a branded QR code, and prin
   - 10 presets; frames: none, card, banner or a printable table tent, with your own call‑to‑action text
   - A contrast warning, and a safe error‑correction level picked automatically when there's a logo
   - Download as PNG (high resolution, with frame) or SVG (code only, logo included), or print 4 table cards per A4 page
+- **Languages and currency** (no API key needed):
+  - Offer the menu in any of 14 languages: English, Sinhala, Tamil, Hindi, Chinese, Japanese, Korean, Russian, German, French, Spanish, Italian, Dutch and Arabic (right to left).
+  - A translation editor covers dish names and descriptions, categories, the tagline and the announcement. **Auto-translate empty fields** uses the browser's free on‑device translator (recent Chrome), or falls back to the free MyMemory service; always review the results.
+  - Fixed labels on the menu ("Search", "Chef's picks", "Sold out", dietary labels…) come translated already.
+  - Optionally, guests' browsers fill in anything you haven't translated, on the device.
+  - Choose extra currencies (USD, EUR, GBP, INR…). Live rates come from open.er-api.com (free, no key, cached for 12 hours), and you can type your own rate for any currency.
+  - Guests switch with the 🌐 button. The language follows their phone's setting, the choice is remembered, and converted prices show as "≈ $4.80" with a note that payment is in your currency.
 - Insights: total menu views, the last 7 days, today, and a 14‑day chart
 
 **For guests** (`/m/<your-link>`)
@@ -96,6 +103,7 @@ public/login.html    login
 public/register.html registration
 public/dashboard.html + js/dashboard.js   owner dashboard: dishes, PDFs, page design, QR designer
 public/js/qr-render.js styled QR code engine (SVG and PNG)
+public/js/i18n.js       languages, translated labels, currencies, machine translation
 public/js/pdf-import.js PDF layout analysis (and OCR for scans): dishes, prices, photos, colours and fonts
 public/menu.html     guest menu page
 ```

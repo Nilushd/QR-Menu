@@ -303,3 +303,18 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 .imp-warn{background:#fff6dc}
 .imp-row.check{border-color:#f0c34a;background:#fffdf5}
 .imp-check{flex:none;align-self:center;background:#f0c34a;color:#3d2c00;font-size:11px;font-weight:700;border-radius:99px;padding:3px 9px}
+/* ---- Languages & currency ---- */
+.chip-sub{font-weight:400;color:var(--muted);font-size:11.5px}
+.chip.sel .chip-sub{color:#d6d0c6}
+.tr-h{font:700 12px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 0 8px}
+.tr-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.tr-row.tr-desc .tr-orig{font-size:12.5px;color:var(--muted);font-style:italic}
+.tr-row.tr-name .tr-orig{font-weight:600}
+.tr-orig small{display:block;color:var(--muted);font-size:11px;font-weight:600;font-style:normal}
+.tr-row input{padding:7px 10px;font-size:13.5px}
+.tr-row input.machine{background:#fffbea}
+.rate-head,.rate-row{display:grid;grid-template-columns:110px 260px 1fr;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.rate-head{font-size:12px;font-weight:600;color:var(--muted)}
+.rate-in{display:flex;align-items:center;gap:6px;font-size:13px}
+.rate-in input{width:120px;padding:6px 8px}
+@media (max-width:700px){.tr-row,.rate-head,.rate-row{grid-template-columns:1fr}}

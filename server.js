@@ -84,6 +84,11 @@ const cols = db.prepare('PRAGMA table_info(restaurants)').all().map(c => c.name)
 if (!cols.includes('qr_logo')) db.exec('ALTER TABLE restaurants ADD COLUMN qr_logo TEXT');
 if (!cols.includes('page')) db.exec("ALTER TABLE restaurants ADD COLUMN page TEXT DEFAULT '{}'");
 if (!cols.includes('bg_image')) db.exec('ALTER TABLE restaurants ADD COLUMN bg_image TEXT');
+if (!db.prepare('PRAGMA table_info(dishes)').all().some(c => c.name === 'i18n')) db.exec("ALTER TABLE dishes ADD COLUMN i18n TEXT DEFAULT '{}'");
+
+// Must match public/js/i18n.js
+const LANG_CODES = ['en', 'si', 'ta', 'hi', 'zh', 'ja', 'ko', 'ru', 'de', 'fr', 'es', 'it', 'nl', 'ar'];
+const CURRENCY_CODES = ['LKR', 'USD', 'EUR', 'GBP', 'INR', 'AUD', 'CAD', 'CNY', 'JPY', 'RUB', 'AED', 'SGD', 'MYR', 'THB', 'CHF', 'KRW', 'MVR', 'SAR', 'NZD', 'SEK', 'NOK', 'DKK', 'HKD'];
 
 const THEMES = ['elegant', 'modern', 'rustic', 'midnight', 'fresh', 'custom'];
 const DISH_TAGS = ['chef', 'popular', 'new', 'veg', 'vegan', 'spicy', 'gf', 'seafood'];
@@ -96,6 +101,9 @@ const PAGE_OPTIONS = {
   nameCase: ['none', 'upper'],
   order: ['dishes', 'pdf'],
   featured: [true, false],
+  autoTranslate: [true, false],
+  baseLang: LANG_CODES,
+  baseCurrency: ['', ...CURRENCY_CODES],
   search: [true, false],
   currency: 12, announcement: 140, instagram: 200, facebook: 200, website: 200, whatsapp: 30,
   headFont: 40, nameFont: 40, bodyFont: 40,
@@ -103,7 +111,7 @@ const PAGE_OPTIONS = {
 const COLOR_KEYS = ['bg', 'surface', 'ink', 'muted'];
 const PAGE_DEFAULTS = { font: 'auto', hero: 'full', layout: 'classic', order: 'dishes', featured: true, search: true,
   currency: '', announcement: '', instagram: '', facebook: '', website: '', whatsapp: '',
-  bgMode: 'none', nameCase: 'none', headFont: '', nameFont: '', bodyFont: '', colors: { bg: '#f6f3ee', surface: '#ffffff', ink: '#1d2421', muted: '#5f6b66' } };
+  bgMode: 'none', nameCase: 'none', baseLang: 'en', languages: [], autoTranslate: true, baseCurrency: '', currencies: [], rates: {}, i18n: {}, headFont: '', nameFont: '', bodyFont: '', colors: { bg: '#f6f3ee', surface: '#ffffff', ink: '#1d2421', muted: '#5f6b66' } };
 function cleanPage(input, prev) {
   const out = { ...PAGE_DEFAULTS, ...prev };
   for (const [k, rule] of Object.entries(PAGE_OPTIONS)) {
@@ -117,6 +125,12 @@ function cleanPage(input, prev) {
     out.colors = { ...PAGE_DEFAULTS.colors, ...prev.colors };
     for (const k of COLOR_KEYS) if (/^#[0-9a-fA-F]{6}$/.test(input.colors[k] || '')) out.colors[k] = input.colors[k].toLowerCase();
   }
+  if (Array.isArray(input.languages)) out.languages = [...new Set(input.languages.filter(l => LANG_CODES.includes(l) && l !== out.baseLang))];
+  if (Array.isArray(input.currencies)) out.currencies = [...new Set(input.currencies.filter(c => CURRENCY_CODES.includes(c) && c !== out.baseCurrency))];
+  if (input.rates && typeof input.rates === 'object') {
+    out.rates = {};
+    for (const [c, v] of Object.entries(input.rates)) if (CURRENCY_CODES.includes(c) && +v > 0 && +v < 1e7) out.rates[c] = +v;
+  }
   for (const k of ['instagram', 'facebook', 'website']) {
     if (out[k] && !/^https?:\/\//i.test(out[k])) out[k] = 'https://' + out[k].replace(/^\/+/, '');
   }
@@ -124,7 +138,7 @@ function cleanPage(input, prev) {
 }
 function dishJson(d) {
   return { id: d.id, name: d.name, description: d.description, price: d.price, category: d.category,
-    photo: d.photo ? `/uploads/${d.photo}` : null, tags: JSON.parse(d.tags || '[]'), featured: !!d.featured, available: !!d.available, sort: d.sort };
+    photo: d.photo ? `/uploads/${d.photo}` : null, tags: JSON.parse(d.tags || '[]'), i18n: JSON.parse(d.i18n || '{}'), featured: !!d.featured, available: !!d.available, sort: d.sort };
 }
 const PROFILE_FIELDS = ['name', 'tagline', 'address', 'phone', 'hours', 'wifi', 'theme', 'accent'];
 
@@ -420,6 +434,48 @@ app.delete('/api/dishes/:id', auth, (req, res) => {
   db.prepare('DELETE FROM dishes WHERE id = ?').run(d.id);
   removeUpload(d.photo);
   res.json({ restaurant: restaurantJson(req.restaurant) });
+});
+
+// ---------- Translations ----------
+const clip = (v, n) => String(v ?? '').trim().slice(0, n);
+app.put('/api/translations/:lang', auth, (req, res) => {
+  const lang = req.params.lang, b = req.body || {};
+  if (!LANG_CODES.includes(lang)) return res.status(400).json({ error: 'Unknown language.' });
+  const upd = db.prepare('UPDATE dishes SET i18n = ? WHERE id = ? AND restaurant_id = ?');
+  for (const d of db.prepare('SELECT id, i18n FROM dishes WHERE restaurant_id = ?').all(req.restaurant.id)) {
+    const t = b.dishes?.[d.id]; if (!t) continue;
+    const i18n = JSON.parse(d.i18n || '{}');
+    i18n[lang] = { name: clip(t.name, 80), description: clip(t.description, 400) };
+    if (!i18n[lang].name && !i18n[lang].description) delete i18n[lang];
+    upd.run(JSON.stringify(i18n), d.id, req.restaurant.id);
+  }
+  const page = JSON.parse(req.restaurant.page || '{}');
+  page.i18n = page.i18n || {};
+  const cats = {};
+  for (const [k, v] of Object.entries(b.categories || {}).slice(0, 100)) if (clip(v, 40)) cats[clip(k, 40)] = clip(v, 40);
+  page.i18n[lang] = { categories: cats, tagline: clip(b.tagline, 120), announcement: clip(b.announcement, 140) };
+  db.prepare('UPDATE restaurants SET page = ? WHERE id = ?').run(JSON.stringify(page), req.restaurant.id);
+  res.json({ restaurant: restaurantJson(db.prepare('SELECT * FROM restaurants WHERE id = ?').get(req.restaurant.id)) });
+});
+
+// ---------- Exchange rates (free, no key: open.er-api.com, cached for 12 hours) ----------
+const rateCache = new Map();
+app.get('/api/rates/:base', async (req, res) => {
+  const base = req.params.base.toUpperCase();
+  if (!CURRENCY_CODES.includes(base)) return res.status(400).json({ error: 'Unknown currency.' });
+  const hit = rateCache.get(base);
+  if (hit && Date.now() - hit.at < 12 * 3600e3) return res.json(hit.data);
+  try {
+    const r = await fetch(`https://open.er-api.com/v6/latest/${base}`, { signal: AbortSignal.timeout(8000) });
+    const j = await r.json();
+    if (j.result !== 'success') throw new Error(j['error-type'] || 'failed');
+    const data = { base, updated: j.time_last_update_utc, rates: Object.fromEntries(CURRENCY_CODES.filter(c => j.rates[c]).map(c => [c, j.rates[c]])) };
+    rateCache.set(base, { at: Date.now(), data });
+    res.json(data);
+  } catch {
+    if (hit) return res.json(hit.data);
+    res.status(503).json({ error: 'Live exchange rates are not available right now. You can enter your own rates.' });
+  }
 });
 
 // ---------- Public ----------

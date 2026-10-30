@@ -1,12 +1,13 @@
 import * as pdfjsLib from '/vendor/pdfjs/pdf.min.mjs';
 import { extractMenu } from '/js/pdf-import.js';
+import { LANGS, CURRENCIES, machineTranslate } from '/js/i18n.js';
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 let me, R;
 
-const TABS = ['dishes', 'menus', 'design', 'qr', 'insights'];
+const TABS = ['dishes', 'menus', 'design', 'intl', 'qr', 'insights'];
 const THEME_META = {
   elegant: { label: 'Elegant', bg: '#faf6ef', fg: '#2b2620', font: 'Georgia, serif' },
   modern: { label: 'Modern', bg: '#ffffff', fg: '#111', font: 'Inter, sans-serif' },
@@ -57,6 +58,7 @@ function showTab() {
   $$('.side a[data-tab]').forEach(a => a.classList.toggle('active', a.dataset.tab === tab));
   if (tab === 'qr') renderQr();
   if (tab === 'design') loadPreview();
+  if (tab === 'intl') fillIntl();
   window.scrollTo({ top: 0 });
 }
 window.addEventListener('hashchange', showTab);
@@ -743,6 +745,135 @@ $('#printQr').onclick = async () => {
     <script>window.onload=()=>setTimeout(()=>print(),300)<\/script>`);
   w.document.close();
 };
+
+// ---------- Languages & currency ----------
+let intl, live = null;
+function fillIntl() {
+  const P = R.page;
+  intl = { baseLang: P.baseLang || 'en', languages: [...(P.languages || [])], autoTranslate: P.autoTranslate !== false,
+    baseCurrency: P.baseCurrency || guessCurrency(), currencies: [...(P.currencies || [])], rates: { ...(P.rates || {}) } };
+  $('#baseLang').innerHTML = Object.entries(LANGS).map(([k, l]) => `<option value="${k}">${l.name} — ${l.native}</option>`).join('');
+  $('#baseCurrency').innerHTML = Object.entries(CURRENCIES).map(([k, sym]) => `<option value="${k}">${k} (${sym})</option>`).join('');
+  $('#baseLang').value = intl.baseLang; $('#baseCurrency').value = intl.baseCurrency; $('#autoTranslate').checked = intl.autoTranslate;
+  paintIntl(); loadRates();
+}
+// Best guess from the price prefix the owner already uses (e.g. "LKR", "$", "Rs.")
+function guessCurrency() {
+  const c = (R.page.currency || '').trim().toUpperCase().replace(/\.$/, '');
+  if (CURRENCIES[c]) return c;
+  const bySym = { '$': 'USD', '€': 'EUR', '£': 'GBP', '₹': 'INR', 'RS': 'LKR', '¥': 'JPY', '฿': 'THB', 'RM': 'MYR' };
+  return bySym[c] || 'LKR';
+}
+function paintIntl() {
+  $('#langChips').innerHTML = Object.entries(LANGS).filter(([k]) => k !== intl.baseLang).map(([k, l]) =>
+    `<button type="button" class="chip${intl.languages.includes(k) ? ' sel' : ''}" data-lang="${k}">${l.native}${l.native !== l.name ? ` <span class="chip-sub">${l.name}</span>` : ''}</button>`).join('');
+  $('#curChips').innerHTML = Object.keys(CURRENCIES).filter(k => k !== intl.baseCurrency).map(k =>
+    `<button type="button" class="chip${intl.currencies.includes(k) ? ' sel' : ''}" data-cur="${k}">${CURRENCIES[k]} ${k}</button>`).join('');
+  $('#trBox').classList.toggle('hidden', !intl.languages.length);
+  const prev = $('#trLang').value;
+  $('#trLang').innerHTML = intl.languages.map(k => `<option value="${k}">${LANGS[k].name} — ${LANGS[k].native}</option>`).join('');
+  if (intl.languages.includes(prev)) $('#trLang').value = prev;
+  renderTr(); renderRates();
+}
+$('#tab-intl').addEventListener('click', e => {
+  const l = e.target.closest('[data-lang]')?.dataset.lang, c = e.target.closest('[data-cur]')?.dataset.cur;
+  if (l) intl.languages = intl.languages.includes(l) ? intl.languages.filter(x => x !== l) : [...intl.languages, l];
+  if (c) intl.currencies = intl.currencies.includes(c) ? intl.currencies.filter(x => x !== c) : [...intl.currencies, c];
+  if (l || c) paintIntl();
+});
+$('#baseLang').onchange = e => { intl.baseLang = e.target.value; intl.languages = intl.languages.filter(x => x !== intl.baseLang); paintIntl(); };
+$('#baseCurrency').onchange = e => { intl.baseCurrency = e.target.value; intl.currencies = intl.currencies.filter(x => x !== intl.baseCurrency); live = null; paintIntl(); loadRates(); };
+$('#autoTranslate').onchange = e => { intl.autoTranslate = e.target.checked; };
+$('#saveIntl').onclick = async () => {
+  readRates();
+  try { R = (await api('/api/restaurant', { method: 'PUT', body: { page: intl } })).restaurant; flash('#intlSaved'); toast('Language and currency settings saved'); }
+  catch (x) { toast(x.message); }
+};
+
+// Translation editor for one language
+function trData(lang) {
+  const P = R.page, cats = [...new Set(R.dishes.map(d => d.category).filter(Boolean))], it = P.i18n?.[lang] || {};
+  return { cats, it };
+}
+function renderTr() {
+  const lang = $('#trLang').value; if (!lang) { $('#trList').innerHTML = ''; return; }
+  const { cats, it } = trData(lang), rtl = LANGS[lang].rtl ? ' dir="rtl"' : '';
+  const row = (label, orig, key, val, max, cls = '') => `<div class="tr-row ${cls}"><div class="tr-orig">${label ? `<small>${label}</small>` : ''}${esc(orig)}</div><input type="text" data-tr="${esc(key)}" value="${esc(val || '')}" maxlength="${max}" placeholder="${esc(LANGS[lang].name)}"${rtl}></div>`;
+  let html = '';
+  if (R.tagline || R.page.announcement) html += '<h4 class="tr-h">Page text</h4>' +
+    (R.tagline ? row('Tagline', R.tagline, 'p:tagline', it.tagline, 120) : '') + (R.page.announcement ? row('Announcement', R.page.announcement, 'p:announcement', it.announcement, 140) : '');
+  if (cats.length) html += '<h4 class="tr-h">Categories</h4>' + cats.map(c => row('', c, 'c:' + c, it.categories?.[c], 40)).join('');
+  if (R.dishes.length) html += '<h4 class="tr-h">Dishes</h4>' + R.dishes.map(d => {
+    const tr = d.i18n?.[lang] || {};
+    return row('', d.name, `n:${d.id}`, tr.name, 80, 'tr-name') + (d.description ? row('', d.description, `d:${d.id}`, tr.description, 400, 'tr-desc') : '');
+  }).join('');
+  $('#trList').innerHTML = html || '<p class="empty">Add dishes first, then translate them here.</p>';
+  const inputs = $$('#trList [data-tr]'), done = inputs.filter(i => i.value.trim()).length;
+  $('#trStatus').textContent = inputs.length ? `${done} of ${inputs.length} translated` : '';
+}
+$('#trLang').onchange = renderTr;
+$('#autoFill').onclick = async () => {
+  const lang = $('#trLang').value, empty = $$('#trList [data-tr]').filter(i => !i.value.trim());
+  if (!empty.length) return toast('Everything is already translated.');
+  const btn = $('#autoFill'); btn.disabled = true; btn.textContent = `Translating ${empty.length}…`;
+  try {
+    const originals = empty.map(i => i.closest('.tr-row').querySelector('.tr-orig').lastChild.textContent);
+    const { texts, via } = await machineTranslate(originals, intl.baseLang, lang);
+    empty.forEach((i, k) => { i.value = texts[k] || ''; i.classList.add('machine'); });
+    toast(`Translated ${empty.length} fields ${via === 'browser' ? 'with your browser' : 'with MyMemory'} — please review, then save.`);
+  } catch (x) { toast(x.message || 'Automatic translation is not available here. You can type translations instead.'); }
+  btn.disabled = false; btn.textContent = '✨ Auto-translate empty fields';
+  renderTrCount();
+};
+function renderTrCount() { const inputs = $$('#trList [data-tr]'); $('#trStatus').textContent = `${inputs.filter(i => i.value.trim()).length} of ${inputs.length} translated`; }
+$('#trList').addEventListener('input', renderTrCount);
+$('#saveTr').onclick = async () => {
+  const lang = $('#trLang').value, body = { dishes: {}, categories: {} };
+  for (const i of $$('#trList [data-tr]')) {
+    const [kind, ...rest] = i.dataset.tr.split(':'), key = rest.join(':'), v = i.value.trim();
+    if (kind === 'p') body[key] = v;
+    else if (kind === 'c') body.categories[key] = v;
+    else (body.dishes[key] ||= {})[kind === 'n' ? 'name' : 'description'] = v;
+  }
+  try { R = (await api('/api/translations/' + lang, { method: 'PUT', body })).restaurant; toast(`${LANGS[lang].name} translations saved`); renderTr(); }
+  catch (x) { toast(x.message); }
+};
+
+// Exchange rates: live from the server when online, or the owner's own rates
+async function loadRates() {
+  $('#rateStatus').textContent = '';
+  try { const r = await api('/api/rates/' + intl.baseCurrency); live = r.rates; $('#rateStatus').textContent = `Live rates updated ${new Date(r.updated).toLocaleDateString()}. Leave a box empty to use the live rate, or type your own.`; }
+  catch (x) { live = null; $('#rateStatus').textContent = x.message; }
+  renderRates();
+}
+function readRates() {
+  for (const i of $$('#rateList [data-rate]')) { const v = parseFloat(i.value); if (v > 0) intl.rates[i.dataset.rate] = 1 / v; else delete intl.rates[i.dataset.rate]; }
+  for (const c of Object.keys(intl.rates)) if (!intl.currencies.includes(c)) delete intl.rates[c];
+}
+function renderRates() {
+  readRates();
+  const b = intl.baseCurrency, sample = R.dishes.find(d => /\d/.test(d.price))?.price || '1,000';
+  const amount = parseFloat((sample.match(/\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?/) || ['1000'])[0].replace(/,/g, ''));
+  // Shown as "1 USD = 300 LKR", which is how owners think about rates
+  $('#rateList').innerHTML = intl.currencies.length ? `<div class="rate-head"><span>Currency</span><span>Your rate</span><span>Example</span></div>` + intl.currencies.map(c => {
+    const own = intl.rates[c], rate = own || live?.[c], per = rate ? 1 / rate : null;
+    const ex = rate ? new Intl.NumberFormat(undefined, { style: 'currency', currency: c, maximumFractionDigits: amount * rate >= 100 ? 0 : 2 }).format(amount * rate) : '—';
+    return `<div class="rate-row"><b>${CURRENCIES[c]} ${c}</b>
+      <span class="rate-in">1 ${c} = <input type="number" step="any" min="0" data-rate="${c}" value="${own ? +(1 / own).toFixed(4) : ''}" placeholder="${live?.[c] ? +(1 / live[c]).toFixed(2) : 'enter rate'}"> ${b}</span>
+      <span class="hint">${b} ${amount.toLocaleString()} ≈ ${ex}${own ? ' · your rate' : live?.[c] ? ' · live rate' : ''}</span></div>`;
+  }).join('') : '';
+}
+// Update only the examples while typing, so the boxes keep their values and focus
+$('#rateList').addEventListener('input', () => {
+  readRates();
+  const sample = R.dishes.find(d => /\d/.test(d.price))?.price || '1,000';
+  const amount = parseFloat((sample.match(/\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?/) || ['1000'])[0].replace(/,/g, ''));
+  $$('#rateList .rate-row').forEach(row => {
+    const c = row.querySelector('[data-rate]').dataset.rate, own = intl.rates[c], rate = own || live?.[c];
+    const ex = rate ? new Intl.NumberFormat(undefined, { style: 'currency', currency: c, maximumFractionDigits: amount * rate >= 100 ? 0 : 2 }).format(amount * rate) : '—';
+    row.querySelector('.hint').textContent = `${intl.baseCurrency} ${amount.toLocaleString()} ≈ ${ex}${own ? ' · your rate' : live?.[c] ? ' · live rate' : ''}`;
+  });
+});
 
 // ---------- Insights ----------
 function renderInsights() {

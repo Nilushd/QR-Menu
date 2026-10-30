@@ -14,6 +14,7 @@
     <a href="#dishes" data-tab="dishes">🍽️ Dishes &amp; photos</a>
     <a href="#menus" data-tab="menus">📄 PDF menus</a>
     <a href="#design" data-tab="design">🎨 Menu page design</a>
+    <a href="#intl" data-tab="intl">🌐 Languages &amp; currency</a>
     <a href="#qr" data-tab="qr">🔳 QR code designer</a>
     <a href="#insights" data-tab="insights">📈 Insights</a>
     <div class="live">Your menu link:<br><a id="liveLink" target="_blank" rel="noopener"></a></div>
@@ -120,6 +121,38 @@
         </form>
         <div class="phone-wrap"><div class="phone"><iframe id="previewFrame" title="Menu preview"></iframe></div>
           <p class="hint" style="text-align:center">Live preview · <a id="previewBtn" target="_blank" rel="noopener">open full page ↗</a></p></div>
+      </div>
+    </section>
+
+    <!-- LANGUAGES & CURRENCY -->
+    <section class="panel tab" id="tab-intl">
+      <div class="panel-head"><div><h2>Languages &amp; currency</h2><p>Let guests read your menu in their language and see prices in their currency.</p></div>
+        <div class="row" style="gap:8px"><span class="saved" id="intlSaved">✓ Saved</span><button class="btn btn-primary" id="saveIntl">Save settings</button></div></div>
+      <div class="ctrl-group"><h3>Languages</h3>
+        <div class="grid2">
+          <div class="field"><label for="baseLang">Your menu is written in</label><select id="baseLang"></select></div>
+          <div class="field"><label>&nbsp;</label><label class="toggle"><input type="checkbox" id="autoTranslate"> Fill gaps automatically in the guest's browser</label>
+            <div class="hint">Free and on-device, where the guest's browser supports it (recent Chrome). Your own translations always come first.</div></div>
+        </div>
+        <div class="field"><label>Also offer the menu in</label><div class="chips" id="langChips"></div></div>
+      </div>
+      <div class="ctrl-group" id="trBox"><h3>Translations</h3>
+        <div class="row" style="margin-bottom:12px">
+          <div class="field" style="flex:0 0 220px;margin:0"><select id="trLang"></select></div>
+          <button class="btn btn-ghost" id="autoFill">✨ Auto-translate empty fields</button>
+          <span class="hint" id="trStatus"></span>
+          <button class="btn btn-primary" id="saveTr" style="margin-left:auto">Save translations</button>
+        </div>
+        <div id="trList"></div>
+      </div>
+      <div class="ctrl-group"><h3>Currency</h3>
+        <div class="grid2">
+          <div class="field"><label for="baseCurrency">Your prices are in</label><select id="baseCurrency"></select>
+            <div class="hint">Guests always pay in this currency; other currencies are shown as approximate.</div></div>
+          <div class="field"><label>Guests can also see prices in</label><div class="chips" id="curChips"></div></div>
+        </div>
+        <div id="rateList"></div>
+        <p class="hint" id="rateStatus"></p>
       </div>
     </section>
 

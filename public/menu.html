@@ -129,7 +129,7 @@ main{display:flex;flex-direction:column;padding:8px 0 30px}
 .tag{font-size:11px;font-weight:600;padding:3px 9px;border-radius:99px;background:var(--tint);color:var(--ink);white-space:nowrap}
 .badge{position:absolute;top:10px;left:10px;background:rgba(255,255,255,.94);color:#111;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;z-index:1}
 .dish.sold .img{filter:grayscale(1);opacity:.6}
-.dish.sold:after{content:"Sold out";position:absolute;top:10px;right:10px;background:#111;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px}
+.dish.sold:after{content:var(--sold,"Sold out");position:absolute;top:10px;right:10px;background:#111;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px}
 /* grid */
 [data-layout=grid] .dishes{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 [data-layout=grid] .dish .img{aspect-ratio:1}
@@ -195,6 +195,22 @@ main{display:flex;flex-direction:column;padding:8px 0 30px}
 footer{text-align:center;color:var(--muted);font-size:12px;padding:10px 0 34px}
 footer a{text-decoration:none;font-weight:600}
 
+/* Language & currency */
+.picker{position:fixed;top:calc(12px + env(safe-area-inset-top));right:12px;z-index:30;display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(8px);color:var(--ink);border-radius:99px;padding:7px 12px;font:600 12.5px var(--body);cursor:pointer;box-shadow:var(--shadow)}
+.picker[hidden]{display:none}
+body.has-picker .tabs{padding-inline-end:132px}
+.price,.pill,.sprice{unicode-bidi:isolate;direction:ltr}
+[dir=rtl] .picker{right:auto;left:12px}
+.sheet.pick .sbody{padding-top:30px}
+.sheet.pick h3{font:600 13px var(--body);color:var(--muted);margin:14px 0 8px}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.opt{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:10px 12px;text-align:start;font:600 15px var(--body);cursor:pointer;display:flex;flex-direction:column}
+.opt small{font-weight:400;font-size:11.5px;color:var(--muted)}
+.opt.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
+.sheet.pick .close{background:transparent;color:var(--ink)}
+footer .fx{margin:0 0 6px;font-style:italic}
+footer .fx:empty{display:none}
+
 /* Dish sheet */
 .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:40;opacity:0;pointer-events:none;transition:opacity .25s;backdrop-filter:blur(2px)}
 .sheet-bg.open{opacity:1;pointer-events:auto}
@@ -242,7 +258,10 @@ footer a{text-decoration:none;font-weight:600}
   <section id="dishesSec"></section>
   <section id="pdfSec"></section>
 </main>
-<footer>Digital menu by <a href="/">MenuQR</a></footer>
+<footer><p class="fx" id="fxNote"></p><p class="fx" id="mtNote"></p>Digital menu by <a href="/">MenuQR</a></footer>
+<button class="picker" id="picker" hidden aria-label="Language and currency"></button>
+<div class="sheet-bg" id="pickBg"></div>
+<div class="sheet pick" id="pick" role="dialog" aria-modal="true"><button class="close" id="pickClose" aria-label="Close">✕</button><div class="sbody" id="pickBody"></div></div>
 <button class="fab" id="top" aria-label="Back to top"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></svg></button>
 
 <div class="sheet-bg" id="sheetBg"></div>
@@ -261,6 +280,7 @@ footer a{text-decoration:none;font-weight:600}
 
 <script type="module">
 import * as pdfjsLib from '/vendor/pdfjs/pdf.min.mjs';
+import { LANGS, t, TAG_ICONS, CURRENCIES } from '/js/i18n.js';
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
 
 const $ = s => document.querySelector(s);
@@ -276,7 +296,16 @@ const FONTS = {
   rustic: ['Lora:wght@400;500;600', "'Lora',Georgia,serif", "'Lora',Georgia,serif"],
 };
 const THEME_FONT = { elegant: 'elegant', modern: 'modern', rustic: 'rustic', midnight: 'classic', fresh: 'friendly' };
-const TAGS = { chef: '👨‍🍳 Chef\'s special', popular: '🔥 Popular', new: '✨ New', veg: '🌱 Vegetarian', vegan: '🥬 Vegan', spicy: '🌶️ Spicy', gf: '🌾 Gluten-free', seafood: '🦐 Seafood' };
+// ---------- Language & currency ----------
+let lang = 'en', cur = '', liveRates = null;
+const autoTr = new Map();               // machine translations made in this browser: "lang|text" -> text
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const tagLabel = k => `${TAG_ICONS[k] || ''} ${t('tag.' + k, lang)}`;
+const baseLang = () => R.page?.baseLang || 'en';
+const auto = s => (s && lang !== baseLang() && autoTr.get(lang + '|' + s)) || s;
+const L = d => { const tr = d.i18n?.[lang]; return { ...d, name: tr?.name || auto(d.name), description: tr?.description || auto(d.description) }; };
+const catName = c => R.page?.i18n?.[lang]?.categories?.[c] || auto(c);
+const pageText = k => R.page?.i18n?.[lang]?.[k] || auto(k === 'tagline' ? R.tagline : R.page?.[k]);
 const ICON = {
   clock: '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   phone: '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>',
@@ -300,7 +329,9 @@ async function init() {
   if (!res.ok) { $$('.rname').forEach(e => e.textContent = 'Menu not found'); $('#main').innerHTML = '<div class="state"><h2>We couldn\'t find this menu</h2><p>Please ask a member of staff for help.</p></div>'; return; }
   R = await res.json();
   if (!PREVIEW && !sessionStorage.getItem('v:' + slug)) { fetch(`/api/public/${encodeURIComponent(slug)}/view`, { method: 'POST' }).catch(() => {}); try { sessionStorage.setItem('v:' + slug, 1); } catch {} }
+  await setupLocale();
   renderLook(); renderDishes(); renderPdfs(); renderTabs();
+  autoTranslate();
 }
 
 // Live preview from the dashboard
@@ -337,27 +368,46 @@ function renderLook() {
   $('#backdrop').style.backgroundImage = document.documentElement.dataset.bg === 'photo' ? `url("${R.bg_image}")` : '';
   document.querySelector('meta[name=theme-color]').content = getComputedStyle(b).getPropertyValue('--bg').trim() || R.accent;
   $$('.rname').forEach(e => e.textContent = R.name);
-  $$('.tagline').forEach(e => { e.textContent = R.tagline || ''; e.hidden = !R.tagline; });
+  const tag = pageText('tagline');
+  $$('.tagline').forEach(e => { e.textContent = tag || ''; e.hidden = !tag; });
   const h = $('#hero');
   h.classList.toggle('no-cover', !R.cover); h.style.backgroundImage = R.cover ? `url("${R.cover}")` : '';
   $$('.logo').forEach(l => { l.hidden = !R.logo; l.style.backgroundImage = R.logo ? `url("${R.logo}")` : ''; });
-  const an = $('#announce'); an.textContent = P.announcement || ''; an.hidden = !P.announcement;
+  const ann = pageText('announcement');
+  const an = $('#announce'); an.textContent = ann || ''; an.hidden = !ann;
+  document.documentElement.lang = lang; document.documentElement.dir = LANGS[lang]?.rtl ? 'rtl' : 'ltr';
+  b.style.setProperty('--sold', JSON.stringify(t('soldOut', lang)));
+  renderPicker();
 
   const chips = [];
   if (R.hours) chips.push(`<span class="chip" title="${esc(R.hours)}">${ICON.clock}<span>${esc(R.hours.split('\n')[0])}</span></span>`);
-  if (R.phone) chips.push(`<a class="chip" href="tel:${esc(R.phone.replace(/[^\d+]/g, ''))}">${ICON.phone}<span>Call</span></a>`);
-  if (R.address) chips.push(`<a class="chip" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(R.address)}">${ICON.pin}<span>Directions</span></a>`);
+  if (R.phone) chips.push(`<a class="chip" href="tel:${esc(R.phone.replace(/[^\d+]/g, ''))}">${ICON.phone}<span>${t('call', lang)}</span></a>`);
+  if (R.address) chips.push(`<a class="chip" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(R.address)}">${ICON.pin}<span>${t('directions', lang)}</span></a>`);
   if (R.wifi) chips.push(`<button class="chip" id="wifi">${ICON.wifi}<span>Wi-Fi: ${esc(R.wifi)}</span></button>`);
   $('#info').innerHTML = chips.join('');
   const social = [];
   for (const k of ['instagram', 'facebook', 'website']) if (safeUrl(P[k])) social.push(`<a class="chip icon" href="${esc(P[k])}" target="_blank" rel="noopener" aria-label="${k}">${ICON[k]}</a>`);
   if (P.whatsapp && P.whatsapp.replace(/\D/g, '')) social.push(`<a class="chip icon" href="https://wa.me/${P.whatsapp.replace(/\D/g, '')}" target="_blank" rel="noopener" aria-label="WhatsApp">${ICON.whatsapp}</a>`);
   $('#social').innerHTML = social.join('');
-  $('#wifi')?.addEventListener('click', () => navigator.clipboard?.writeText(R.wifi).then(() => toast('Wi-Fi password copied'), () => {}));
+  $('#wifi')?.addEventListener('click', () => navigator.clipboard?.writeText(R.wifi).then(() => toast(t('wifiCopied', lang)), () => {}));
 }
 
 // ---------- Dishes ----------
-const priceText = p => p && /^[\d.,\s]+$/.test(p) && R.page?.currency ? `${R.page.currency} ${p}` : (p || '');
+const basePrice = p => p && /^[\d.,\s/|]+$/.test(p) && R.page?.currency ? `${R.page.currency} ${p}` : (p || '');
+function rateFor(c) { const P = R.page || {}; return +P.rates?.[c] || liveRates?.[c] || 0; }
+// "1,450" or "LKR 450 / 800" -> "≈ $4.80" / "≈ $1.50 / $2.70" in the guest's chosen currency
+function priceText(p) {
+  const base = R.page?.baseCurrency, rate = cur && cur !== base ? rateFor(cur) : 0;
+  if (!p || !rate) return basePrice(p);
+  const nums = p.match(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:[.,]\d{1,2})?/g);
+  if (!nums) return basePrice(p);
+  const fmt = new Intl.NumberFormat(lang, { style: 'currency', currency: cur, maximumFractionDigits: 2 });
+  const out = nums.map(n => {
+    const v = parseFloat(/,\d{3}/.test(n) ? n.replace(/,/g, '') : n.replace(',', '.')) * rate;
+    return v >= 100 ? new Intl.NumberFormat(lang, { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(Math.round(v)) : fmt.format(v);
+  });
+  return '≈ ' + out.join(' / ');
+}
 const letter = name => esc((name || '?').trim()[0]?.toUpperCase() || '?');
 function categories() {
   const groups = new Map();
@@ -366,7 +416,8 @@ function categories() {
 }
 const catId = i => 'cat-' + i;
 function dishCard(d) {
-  const tagHtml = d.tags.map(t => `<span class="tag">${TAGS[t] || ''}</span>`).join('');
+  d = L(d);
+  const tagHtml = d.tags.map(t => `<span class="tag">${tagLabel(t)}</span>`).join('');
   const badge = d.featured ? '<span class="badge">⭐ Chef\'s pick</span>' : d.tags.includes('popular') ? '<span class="badge">🔥 Popular</span>' : d.tags.includes('new') ? '<span class="badge">✨ New</span>' : '';
   return `<article class="dish${d.available ? '' : ' sold'}" data-id="${d.id}" tabindex="0" role="button" aria-label="${esc(d.name)}">
     <div class="img${d.photo ? '' : ' none'}" ${d.photo ? `style="background-image:url('${d.photo}')"` : ''}>${d.photo ? '' : `<span class="ph-letter">${letter(d.name)}</span>`}${badge}</div>
@@ -377,23 +428,24 @@ function renderDishes() {
   const sec = $('#dishesSec'), P = R.page || {};
   if (!R.dishes.length) { sec.innerHTML = ''; return; }
   const q = query.toLowerCase();
-  const match = d => !q || `${d.name} ${d.description} ${d.category}`.toLowerCase().includes(q);
+  const match = d => { if (!q) return true; const l = L(d); return `${d.name} ${d.description} ${d.category} ${l.name} ${l.description} ${catName(d.category)}`.toLowerCase().includes(q); };
   const feat = R.dishes.filter(d => d.featured && d.available);
   let html = '';
-  if (P.search && R.dishes.length > 4) html += `<div class="search">${ICON.search}<input id="q" type="search" placeholder="Search the menu…" value="${esc(query)}" aria-label="Search dishes"></div>`;
+  if (P.search && R.dishes.length > 4) html += `<div class="search">${ICON.search}<input id="q" type="search" placeholder="${t('search', lang)}" value="${esc(query)}" aria-label="Search dishes"></div>`;
   if (P.featured && feat.length && !q) {
-    html += `<div class="featured"><h2>⭐ Chef's picks</h2><div class="carousel">${feat.map(d => `
+    const featL = feat.map(L);
+    html += `<div class="featured"><h2>⭐ ${t('chefPicks', lang)}</h2><div class="carousel">${featL.map(d => `
       <button class="feat-card" data-id="${d.id}" ${d.photo ? `style="background-image:url('${d.photo}')"` : ''}>${d.photo ? '' : `<span class="ph-letter">${letter(d.name)}</span>`}
-        <span class="lbl">Must try</span><div class="ft"><h3>${esc(d.name)}</h3>${d.description ? `<p>${esc(d.description)}</p>` : ''}${d.price ? `<span class="pill">${esc(priceText(d.price))}</span>` : ''}</div></button>`).join('')}</div></div>`;
+        <span class="lbl">${t('mustTry', lang)}</span><div class="ft"><h3>${esc(d.name)}</h3>${d.description ? `<p>${esc(d.description)}</p>` : ''}${d.price ? `<span class="pill">${esc(priceText(d.price))}</span>` : ''}</div></button>`).join('')}</div></div>`;
   }
   let any = false;
   categories().forEach(([cat, list], i) => {
     const shown = list.filter(match);
     if (!shown.length) return;
     any = true;
-    html += `<section class="cat" id="${catId(i)}" data-nav="${catId(i)}"><h2 class="sec-title">${esc(cat)}</h2><div class="dishes">${shown.map(dishCard).join('')}</div></section>`;
+    html += `<section class="cat" id="${catId(i)}" data-nav="${catId(i)}"><h2 class="sec-title">${esc(catName(cat))}</h2><div class="dishes">${shown.map(dishCard).join('')}</div></section>`;
   });
-  if (!any) html += `<p class="no-results">No dishes match “${esc(query)}”.</p>`;
+  if (!any) html += `<p class="no-results">${esc(t('noResults', lang, query))}</p>`;
   sec.innerHTML = html;
   const qi = $('#q');
   if (qi) {
@@ -405,13 +457,13 @@ $('#dishesSec').addEventListener('click', e => { const el = e.target.closest('[d
 $('#dishesSec').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('.dish')) openSheet(+e.target.dataset.id); });
 
 function openSheet(id) {
-  const d = R.dishes.find(x => x.id === id); if (!d) return;
+  let d = R.dishes.find(x => x.id === id); if (!d) return; d = L(d);
   const img = $('#sImg'); img.classList.toggle('none', !d.photo); img.style.backgroundImage = d.photo ? `url("${d.photo}")` : '';
   $('#sName').textContent = d.name;
   $('#sPrice').innerHTML = d.price ? `<span class="sprice">${esc(priceText(d.price))}</span>` : '';
-  $('#sTags').innerHTML = d.tags.map(t => `<span class="tag">${TAGS[t] || ''}</span>`).join('');
+  $('#sTags').innerHTML = d.tags.map(t => `<span class="tag">${tagLabel(t)}</span>`).join('');
   $('#sDesc').textContent = d.description || '';
-  $('#sSold').innerHTML = d.available ? '' : '<p class="sold-note">Sorry — this dish is sold out today.</p>';
+  $('#sSold').innerHTML = d.available ? '' : `<p class="sold-note">${t('soldOutToday', lang)}</p>`;
   $('#sheet').scrollTop = 0;
   $('#sheet').classList.add('open'); $('#sheetBg').classList.add('open'); document.body.style.overflow = 'hidden';
   $('#sheetClose').focus({ preventScroll: true });
@@ -426,7 +478,7 @@ $('#sheet').addEventListener('touchend', e => { if (sy != null && e.changedTouch
 let spy;
 function renderTabs() {
   const items = [];
-  categories().forEach(([cat], i) => { if (document.getElementById(catId(i))) items.push([catId(i), esc(cat)]); });
+  categories().forEach(([cat], i) => { if (document.getElementById(catId(i))) items.push([catId(i), esc(catName(cat))]); });
   const pdfItems = R.menus.map((m, i) => ['menu-' + i, esc(m.title)]);
   const all = (R.page?.order === 'pdf' ? [...pdfItems, ...items] : [...items, ...pdfItems]);
   $('#tabsWrap').hidden = all.length < 2;
@@ -452,12 +504,12 @@ const revealObs = new IntersectionObserver(es => es.forEach(e => { if (e.isInter
 
 function renderPdfs() {
   const sec = $('#pdfSec');
-  if (!R.menus.length && !R.dishes.length) { sec.innerHTML = '<div class="state"><h2>Menu coming soon</h2><p>Please ask a member of staff for today\'s menu.</p></div>'; return; }
+  if (!R.menus.length && !R.dishes.length) { sec.innerHTML = `<div class="state"><h2>${t('menuSoon', lang)}</h2></div>`; return; }
   const titled = R.menus.length > 1 || R.dishes.length > 0;
   sec.innerHTML = R.menus.map((m, i) => `<section id="menu-${i}">
     ${titled ? `<h2 class="sec-title">${esc(m.title)}</h2>` : ''}
     <div class="pages"><div class="page in"><div style="padding-top:141%"></div><div class="ph"></div></div></div>
-    <div class="dl"><a href="${m.url}" target="_blank" rel="noopener">Open ${esc(m.title)} as PDF</a></div></section>`).join('');
+    <div class="dl"><a href="${m.url}" target="_blank" rel="noopener">${esc(t('openPdf', lang, m.title))}</a></div></section>`).join('');
   R.menus.forEach((m, i) => loadMenu(m, i));
 }
 async function loadMenu(m, i) {
@@ -499,17 +551,17 @@ async function drawPage(el) {
 }
 
 // PDF lightbox
-let cur = 0;
+let lbIdx = 0;
 async function openLb(target) {
   pages = $$('.page[data-menu]');
-  cur = typeof target === 'number' ? target : pages.indexOf(target);
-  const el = pages[cur], mi = +el.dataset.menu, pn = +el.dataset.page, idx = cur;
+  lbIdx = typeof target === 'number' ? target : pages.indexOf(target);
+  const el = pages[lbIdx], mi = +el.dataset.menu, pn = +el.dataset.page, idx = lbIdx;
   $('#lb').classList.add('open'); document.body.style.overflow = 'hidden';
   $('#lbTitle').textContent = `${R.menus[mi].title} · ${pn}/${docs[mi].numPages}`;
-  $('#lbPrev').disabled = cur === 0; $('#lbNext').disabled = cur === pages.length - 1;
+  $('#lbPrev').disabled = lbIdx === 0; $('#lbNext').disabled = lbIdx === pages.length - 1;
   const sc = $('#lbScroll'); sc.classList.remove('zoomed'); $('#lbZoom').textContent = '＋'; sc.innerHTML = '';
   const c = await renderTo(mi, pn, Math.min(1800, Math.max(innerWidth, 900) * 2));
-  if (cur === idx) { sc.innerHTML = ''; sc.appendChild(c); }
+  if (lbIdx === idx) { sc.innerHTML = ''; sc.appendChild(c); }
 }
 function closeLb() { $('#lb').classList.remove('open'); document.body.style.overflow = ''; }
 function toggleZoom(e) {
@@ -520,8 +572,8 @@ function toggleZoom(e) {
 $('#lbClose').onclick = closeLb;
 $('#lbZoom').onclick = () => toggleZoom();
 $('#lbScroll').ondblclick = toggleZoom;
-$('#lbPrev').onclick = () => cur > 0 && openLb(cur - 1);
-$('#lbNext').onclick = () => cur < pages.length - 1 && openLb(cur + 1);
+$('#lbPrev').onclick = () => lbIdx > 0 && openLb(lbIdx - 1);
+$('#lbNext').onclick = () => lbIdx < pages.length - 1 && openLb(lbIdx + 1);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeSheet(); closeLb(); }
   if (!$('#lb').classList.contains('open')) return;
@@ -534,6 +586,63 @@ $('#lbScroll').addEventListener('touchend', e => { if (tx == null) return; const
 const fab = $('#top');
 addEventListener('scroll', () => fab.classList.toggle('show', scrollY > 700), { passive: true });
 fab.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+function langsAvailable() { return [baseLang(), ...(R.page?.languages || [])].filter((l, i, a) => LANGS[l] && a.indexOf(l) === i); }
+function currenciesAvailable() { const P = R.page || {}; return P.baseCurrency ? [P.baseCurrency, ...(P.currencies || [])].filter(c => c === P.baseCurrency || rateFor(c)) : []; }
+function renderPicker() {
+  const ls = langsAvailable(), cs = currenciesAvailable();
+  const btn = $('#picker');
+  btn.hidden = ls.length < 2 && cs.length < 2;
+  document.body.classList.toggle('has-picker', !btn.hidden);
+  btn.innerHTML = `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>${ls.length > 1 ? lang.toUpperCase() : ''}${ls.length > 1 && cs.length > 1 ? ' · ' : ''}${cs.length > 1 ? cur : ''}`;
+  const note = $('#fxNote');
+  if (note) note.textContent = cur && cur !== R.page?.baseCurrency ? t('approx', lang, R.page.baseCurrency) : '';
+}
+function openPicker() {
+  const ls = langsAvailable(), cs = currenciesAvailable();
+  $('#pickBody').innerHTML = (ls.length > 1 ? `<h3>${t('language', lang)}</h3><div class="opts">${ls.map(l => `<button class="opt${l === lang ? ' on' : ''}" data-lang="${l}" lang="${l}">${LANGS[l].native}<small>${LANGS[l].name}</small></button>`).join('')}</div>` : '') +
+    (cs.length > 1 ? `<h3>${t('currency', lang)}</h3><div class="opts">${cs.map(c => `<button class="opt${c === cur ? ' on' : ''}" data-cur="${c}">${CURRENCIES[c] || ''} ${c}</button>`).join('')}</div>` : '');
+  $('#pick').classList.add('open'); $('#pickBg').classList.add('open');
+}
+function closePicker() { $('#pick').classList.remove('open'); $('#pickBg').classList.remove('open'); }
+$('#picker').onclick = openPicker; $('#pickBg').onclick = closePicker; $('#pickClose').onclick = closePicker;
+$('#pickBody').onclick = e => {
+  const l = e.target.closest('[data-lang]')?.dataset.lang, c = e.target.closest('[data-cur]')?.dataset.cur;
+  if (l) { lang = l; store.set('mq-lang', l); }
+  if (c) { cur = c; store.set('mq-cur', c); }
+  if (!l && !c) return;
+  closePicker(); rerender(); if (l) autoTranslate();
+};
+function rerender() { renderLook(); renderDishes(); renderTabs(); $$('.dl a').forEach((a, i) => a.textContent = t('openPdf', lang, R.menus[i]?.title || '')); }
+
+// Fill gaps the owner hasn't translated using the guest's own browser (on-device, no service involved)
+async function autoTranslate() {
+  if (lang === baseLang() || R.page?.autoTranslate === false || !('Translator' in self)) return;
+  const want = new Set();
+  for (const d of R.dishes) { if (!d.i18n?.[lang]?.name) want.add(d.name); if (d.description && !d.i18n?.[lang]?.description) want.add(d.description); if (d.category && !R.page?.i18n?.[lang]?.categories?.[d.category]) want.add(d.category); }
+  if (R.tagline && !R.page?.i18n?.[lang]?.tagline) want.add(R.tagline);
+  const todo = [...want].filter(s => s && !autoTr.has(lang + '|' + s));
+  if (!todo.length) return;
+  try {
+    const limit = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+    if ((await limit(Translator.availability({ sourceLanguage: baseLang(), targetLanguage: lang }), 5000)) === 'unavailable') return;
+    const tr = await limit(Translator.create({ sourceLanguage: baseLang(), targetLanguage: lang }), 30000), target = lang;
+    for (const s of todo) autoTr.set(target + '|' + s, await tr.translate(s));
+    if (lang === target) { rerender(); $('#mtNote').textContent = t('machine', lang); }
+  } catch { /* the original text stays */ }
+}
+
+async function setupLocale() {
+  const P = R.page || {};
+  const ls = langsAvailable();
+  const saved = store.get('mq-lang'), browser = (navigator.languages || [navigator.language]).map(x => (x || '').slice(0, 2));
+  lang = ls.includes(saved) ? saved : browser.find(b => ls.includes(b)) || baseLang();
+  if (P.baseCurrency && (P.currencies || []).some(c => !+P.rates?.[c])) {
+    try { const r = await fetch('/api/rates/' + P.baseCurrency); if (r.ok) liveRates = (await r.json()).rates; } catch {}
+  }
+  const cs = currenciesAvailable(), savedCur = store.get('mq-cur');
+  cur = cs.includes(savedCur) ? savedCur : P.baseCurrency || '';
+}
 
 init();
 </script>
