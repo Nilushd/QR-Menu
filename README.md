@@ -11,6 +11,14 @@ Restaurants register, upload their menu PDFs, design a branded QR code, and prin
   - Mark dishes as "featured" or "unavailable today", and reorder them
   - Photos are resized in the browser so they load quickly on phones
 - **PDF menus:** upload up to 10 (Food, Drinks, Wine list…), then rename and reorder them; first‑page thumbnails show in the list
+- **✨ Create a photo menu from a PDF, without any AI service:** after an upload (or from the button on any PDF), the app reads the PDF's layout in the browser and finds:
+  - categories (large, bold, uppercase or letter‑spaced headings)
+  - dish names, using the font style that sits next to prices
+  - prices like `1,450`, `$12.50`, `Rs. 950`, `LKR 2,800` or `450 / 800`, whether after dot leaders, in a separate column or on their own line
+  - descriptions, and the **photo next to each dish**, cropped to what's visible (round and rounded photos included)
+  - the PDF's colours, which you can apply to your menu page (accent colour and a dark style)
+
+  You can review and edit every dish before importing, and dishes you already have are skipped. Works with one or two columns, several pages, and PDFs from Canva, Word, InDesign or a browser. A scanned PDF (a picture with no selectable text) is detected and explained, because it would need OCR.
 - **Menu page design**, with a live phone preview that updates as you edit:
   - 5 colour styles plus an accent colour, and 7 font pairings
   - 3 header styles (full photo, compact, minimal) and 3 dish layouts (grid, list, magazine)
@@ -78,6 +86,7 @@ public/login.html    login
 public/register.html registration
 public/dashboard.html + js/dashboard.js   owner dashboard: dishes, PDFs, page design, QR designer
 public/js/qr-render.js styled QR code engine (SVG and PNG)
+public/js/pdf-import.js PDF layout analysis: dishes, prices, photos and colours
 public/menu.html     guest menu page
 ```
 

@@ -249,3 +249,30 @@ input[type=range]{width:100%;accent-color:var(--brand)}
 .photo-empty span{font-size:12.5px}
 .photo-empty[hidden]{display:none}
 @media (max-width:1100px){.design-layout{grid-template-columns:1fr}.phone-wrap{position:static}}
+
+/* ---- PDF import review ---- */
+.dlg-wide{width:min(920px,calc(100vw - 24px))}
+.imp-wrap{display:flex;flex-direction:column;max-height:calc(100vh - 32px)}
+.imp-progress{padding:50px 20px;text-align:center}
+.imp-progress .progress{max-width:320px;margin:18px auto 0}
+.spinner{width:42px;height:42px;border:4px solid var(--brand-soft);border-top-color:var(--brand);border-radius:50%;margin:0 auto;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.imp-empty{text-align:center;padding:30px 20px}
+.imp-empty .big{font-size:44px}
+.imp-empty p{color:var(--muted);max-width:460px;margin:6px auto 0}
+.imp-all{margin-bottom:6px}
+.imp-row{display:flex;gap:12px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:#fff;transition:opacity .2s}
+.imp-row.off{opacity:.45}
+.imp-row>input[type=checkbox]{width:18px;height:18px;accent-color:var(--brand);flex:none}
+.imp-thumb{width:64px;height:64px;border-radius:10px;background:#f4efe7 center/cover;flex:none;position:relative;display:grid;place-items:center;font-size:10px;color:var(--muted);text-align:center}
+.imp-x{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:#1f1b16;color:#fff;font-size:10px;cursor:pointer}
+.imp-fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.imp-line{display:flex;gap:6px}
+.imp-fields input{padding:7px 10px;font-size:13.5px;border-radius:8px}
+.imp-fields input[data-f=name]{font-weight:600}
+.imp-price{width:120px;flex:none}
+.imp-cat{width:150px;flex:none}
+.sw-dot{display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:-2px;margin-left:4px;box-shadow:0 0 0 1px var(--line)}
+@media (max-width:640px){.imp-line{flex-direction:column}.imp-price,.imp-cat{width:100%}}
+.imp-line input{flex:1 1 auto;min-width:0;width:auto}
+.imp-line input.imp-price,.imp-line input.imp-cat{flex:0 0 auto}

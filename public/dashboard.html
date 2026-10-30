@@ -199,6 +199,17 @@
     <div class="dlg-foot"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button type="submit" class="btn btn-primary" id="dishSave">Save dish</button></div>
   </form>
 </dialog>
+<dialog id="importDlg" class="dlg dlg-wide">
+  <div class="imp-wrap">
+    <div class="dlg-head"><div><h2 id="impTitle">Create photo menu from PDF</h2><p class="hint" id="impSub" style="margin:2px 0 0"></p></div><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div class="dlg-body" id="impBody"></div>
+    <div class="dlg-foot" id="impFoot">
+      <label class="toggle" id="impColoursWrap" style="margin-right:auto"><input type="checkbox" id="impColours" checked> <span id="impColoursLabel">Use the PDF's colours</span></label>
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button type="button" class="btn btn-primary" id="impGo">Import dishes</button>
+    </div>
+  </div>
+</dialog>
 <input type="file" id="imgInput" accept="image/*" hidden>
 
 <script src="/js/common.js"></script>

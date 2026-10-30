@@ -1,4 +1,5 @@
 import * as pdfjsLib from '/vendor/pdfjs/pdf.min.mjs';
+import { extractMenu } from '/js/pdf-import.js';
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
 
 const $ = s => document.querySelector(s);
@@ -191,6 +192,7 @@ function renderMenus() {
       <div class="menu-thumb">📄</div>
       <div class="meta"><input type="text" value="${esc(m.title)}" maxlength="60" aria-label="Menu name"><small><span class="pages"></span>${fmtSize(m.size)}</small></div>
       <div class="actions">
+        <button class="btn btn-ghost btn-sm" data-import title="Read dishes, prices and photos from this PDF">✨ Create photo menu</button>
         <a class="icon-btn" href="${m.url}" target="_blank" rel="noopener" title="Open PDF">↗</a>
         <button class="icon-btn" data-move="up" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
         <button class="icon-btn" data-move="down" title="Move down" ${i === R.menus.length - 1 ? 'disabled' : ''}>↓</button>
@@ -202,6 +204,7 @@ $('#menuList').addEventListener('click', async e => {
   const li = e.target.closest('.menu-item'); if (!li) return;
   const id = li.dataset.id;
   try {
+    if (e.target.closest('[data-import]')) return openImport(R.menus.find(m => m.id == id));
     if (e.target.closest('[data-move]')) {
       R = (await api(`/api/menus/${id}/move`, { method: 'POST', body: { dir: e.target.closest('[data-move]').dataset.move } })).restaurant; renderMenus();
     } else if (e.target.closest('[data-del]')) {
@@ -227,6 +230,7 @@ function uploadPdf(file) {
     let d = {}; try { d = JSON.parse(xhr.responseText); } catch {}
     if (xhr.status >= 400) return toast(d.error || 'Upload failed.');
     R = d.restaurant; $('#menuTitle').value = ''; renderMenus(); toast('Menu uploaded 🎉');
+    openImport(R.menus.at(-1), true);
   };
   xhr.onerror = () => { prog.classList.add('hidden'); toast('Upload failed. Check your connection.'); };
   xhr.open('POST', '/api/menus'); xhr.send(fd);
@@ -236,6 +240,97 @@ $('#pdfInput').onchange = e => uploadPdf(e.target.files[0]);
 ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => uploadPdf(e.dataTransfer.files[0]));
+
+// ---------- Create a photo menu from a PDF (layout analysis in the browser, no AI service) ----------
+const impDlg = $('#importDlg');
+let found = [], impColours = null;
+impDlg.addEventListener('click', e => { if (e.target.closest('[data-close]') || e.target === impDlg) impDlg.close(); });
+async function openImport(menu, afterUpload) {
+  if (!menu) return;
+  found = []; impColours = null;
+  $('#impTitle').textContent = `Create photo menu from “${menu.title}”`;
+  $('#impSub').textContent = 'Reading dishes, prices and photos from your PDF…';
+  $('#impBody').innerHTML = '<div class="imp-progress"><div class="spinner"></div><div class="progress"><div></div></div></div>';
+  $('#impFoot').classList.add('hidden');
+  impDlg.showModal();
+  let res;
+  try {
+    res = await extractMenu(menu.url, { onProgress: f => { const b = $('#impBody .progress div'); if (b) b.style.width = Math.round(f * 100) + '%'; } });
+  } catch (x) {
+    $('#impSub').textContent = ''; $('#impBody').innerHTML = `<div class="imp-empty"><div class="big">⚠️</div><h3>We couldn't read this PDF</h3><p>${esc(x.message)}</p></div>`; return;
+  }
+  if (!res.hasText || !res.dishes.length) {
+    if (afterUpload) { impDlg.close(); return; }
+    $('#impSub').textContent = '';
+    $('#impBody').innerHTML = `<div class="imp-empty"><div class="big">${res.hasText ? '🤔' : '🖼️'}</div>
+      <h3>${res.hasText ? 'No dishes with prices found' : 'This PDF is a scanned image'}</h3>
+      <p>${res.hasText ? 'We couldn\'t match dish names to prices in this layout.' : 'It has no selectable text (it was probably scanned or exported as a picture), so names and prices can\'t be read.'}
+      Your PDF still works for guests — you can also add dishes by hand in <a href="#dishes" data-close>Dishes &amp; photos</a>.</p></div>`;
+    return;
+  }
+  found = res.dishes.map(d => ({ ...d, use: !R.dishes.some(x => x.name.toLowerCase() === d.name.toLowerCase()), preview: d.photo ? URL.createObjectURL(d.photo) : null }));
+  impColours = res.colours;
+  const photos = found.filter(d => d.photo).length, dupes = found.filter(d => !d.use).length;
+  $('#impSub').textContent = `Found ${found.length} dishes${photos ? ` and ${photos} photos` : ''} in ${new Set(found.map(d => d.category)).size || 1} categories. Check and edit before importing.` +
+    (dupes ? ` ${dupes} already in your menu ${dupes > 1 ? 'are' : 'is'} unticked.` : '');
+  const c = impColours;
+  $('#impColoursWrap').classList.toggle('hidden', !c?.accent);
+  if (c?.accent) $('#impColoursLabel').innerHTML = `Match the PDF's look: <span class="sw-dot" style="background:${c.accent}"></span> accent${c.dark ? ' · dark style' : ''}`;
+  renderFound();
+  $('#impFoot').classList.remove('hidden');
+}
+function renderFound() {
+  const groups = {};
+  found.forEach((d, i) => (groups[d.category || 'Menu'] ||= []).push(i));
+  $('#impBody').innerHTML = `<label class="toggle imp-all"><input type="checkbox" id="impAll" ${found.every(d => d.use) ? 'checked' : ''}> Select all</label>` +
+    Object.entries(groups).map(([cat, idx]) => `<h3 class="cat-head">${esc(cat)} <span>${idx.length}</span></h3>` + idx.map(i => {
+      const d = found[i];
+      return `<div class="imp-row${d.use ? '' : ' off'}" data-i="${i}">
+        <input type="checkbox" data-f="use" ${d.use ? 'checked' : ''} aria-label="Import this dish">
+        <div class="imp-thumb" ${d.preview ? `style="background-image:url('${d.preview}')"` : ''}>${d.preview ? '<button type="button" class="imp-x" data-nophoto title="Don\'t use this photo">✕</button>' : '<span>No photo</span>'}</div>
+        <div class="imp-fields">
+          <div class="imp-line"><input type="text" data-f="name" value="${esc(d.name)}" maxlength="80" aria-label="Name"><input type="text" data-f="price" value="${esc(d.price)}" maxlength="24" class="imp-price" aria-label="Price"></div>
+          <div class="imp-line"><input type="text" data-f="category" value="${esc(d.category)}" maxlength="40" class="imp-cat" aria-label="Category" placeholder="Category"><input type="text" data-f="description" value="${esc(d.description)}" maxlength="400" aria-label="Description" placeholder="Description"></div>
+        </div></div>`;
+    }).join('')).join('');
+  updateImpCount();
+}
+function updateImpCount() { const n = found.filter(d => d.use).length; $('#impGo').textContent = `Import ${n} dish${n === 1 ? '' : 'es'}`; $('#impGo').disabled = !n; }
+$('#impBody').addEventListener('input', e => {
+  if (e.target.id === 'impAll') { found.forEach(d => d.use = e.target.checked); return renderFound(); }
+  const row = e.target.closest('.imp-row'), f = e.target.dataset.f; if (!row || !f) return;
+  const d = found[row.dataset.i];
+  if (f === 'use') { d.use = e.target.checked; row.classList.toggle('off', !d.use); updateImpCount(); }
+  else d[f] = e.target.value;
+});
+$('#impBody').addEventListener('change', e => { if (e.target.dataset.f === 'category') renderFound(); });
+$('#impBody').addEventListener('click', e => {
+  if (!e.target.closest('[data-nophoto]')) return;
+  const d = found[e.target.closest('.imp-row').dataset.i]; d.photo = null; d.preview = null; renderFound();
+});
+$('#impGo').onclick = async () => {
+  const list = found.filter(d => d.use && d.name.trim());
+  const btn = $('#impGo'); btn.disabled = true;
+  let done = 0, failed = 0;
+  for (const d of list) {
+    btn.textContent = `Importing ${done + 1} of ${list.length}…`;
+    const fd = new FormData();
+    for (const k of ['name', 'price', 'category', 'description']) fd.append(k, d[k] || '');
+    if (d.photo) fd.append('file', new File([d.photo], 'photo.jpg', { type: 'image/jpeg' }));
+    try { R = (await api('/api/dishes', { method: 'POST', body: fd })).restaurant; done++; } catch { failed++; }
+  }
+  if ($('#impColours').checked && impColours?.accent && !$('#impColoursWrap').classList.contains('hidden')) {
+    try {
+      const body = { accent: impColours.accent };
+      if (impColours.dark) body.theme = 'midnight';
+      else if (R.theme === 'midnight') body.theme = 'elegant';
+      R = (await api('/api/restaurant', { method: 'PUT', body })).restaurant; fillDesign();
+    } catch {}
+  }
+  impDlg.close(); renderDishes();
+  toast(failed ? `Imported ${done} dishes (${failed} failed)` : `Imported ${done} dishes 🎉`);
+  location.hash = '#dishes';
+};
 
 // ---------- Menu page design ----------
 let draft; // unsaved copy of the restaurant settings, drives the live preview
